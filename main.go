@@ -2,86 +2,113 @@ package main
 
 import (
 	"bufio"
-	"context"
-	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
-	"os/signal"
 )
 
-func main() {
-	sig := make(chan os.Signal, 1)
-	done := make(chan bool)
-	signal.Notify(sig, os.Interrupt, os.Kill)
+const BufSize = 4096
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, "python", "-i")
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		panic(err)
+// GetOutput reads from reader a bufsize amount until there is nothing to read
+func GetOutput(reader io.ReadCloser, writer io.WriteCloser, bufSize int) error {
+	buf := make([]byte, 4096)
+
+	for {
+		n, err := reader.Read(buf)
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			_, err = writer.Write(buf[:n])
+			if err != nil {
+				return err
+			}
+		}
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		panic(err)
+}
+
+func WriteInput(reader io.ReadCloser, next chan string) error {
+	scanner := bufio.NewScanner(reader)
+
+	for scanner.Scan() {
+		input := scanner.Text()
+		next <- input
 	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		panic(err)
+	return scanner.Err()
+}
+
+func ProcessExit(cmd *exec.Cmd, done chan bool) error {
+	if err := cmd.Wait(); err != nil {
+		log.Fatal(err)
 	}
+	done <- true
+	return nil
+}
+
+func main() {
+	cmd := exec.Command("ipython")
+	replStdin, err := cmd.StdinPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+	replStdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+	replStderr, err := cmd.StderrPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	done := make(chan bool)
+	nextLine := make(chan string)
 	err = cmd.Start()
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
-
 	go func() {
-		<-sig
+		err := ProcessExit(cmd, done)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
 
-		cancel()
-
+	// redirect stdout
+	go func() {
+		err := GetOutput(replStdout, os.Stdout, BufSize)
+		if err != nil {
+			if err == io.EOF {
+				return
+			}
+			log.Fatal(err)
+		}
+	}()
+	// redirect stderr
+	go func() {
+		err := GetOutput(replStderr, os.Stderr, BufSize)
+		if err != nil {
+			if err == io.EOF {
+				return
+			}
+			log.Fatal(err)
+		}
+	}()
+	go func() {
+		err := WriteInput(os.Stdin, nextLine)
+		if err != nil {
+			log.Fatal(err)
+		}
+		// reached EOF, break
 		done <- true
 	}()
 
-	go func() {
-		buf := make([]byte, 4096)
-		for {
-			n, err := stdout.Read(buf)
-			if n > 0 {
-				fmt.Fprint(os.Stdout, string(buf[:n]))
-			}
-			if err != nil {
-				break
-			}
-		}
-	}()
-	go func() {
-		buf := make([]byte, 4096)
-		for {
-			n, err := stderr.Read(buf)
-			if n > 0 {
-				fmt.Fprint(os.Stdout, string(buf[:n]))
-			}
-			if err != nil {
-				break
-			}
-		}
-	}()
-
-	scanner := bufio.NewScanner(os.Stdin)
-
-	fmt.Print("> ")
-	for scanner.Scan() {
+	for {
 		select {
 		case <-done:
-			fmt.Println("Donzo!")
-			os.Exit(1)
-		default:
-			input := scanner.Text()
-			_, err := io.WriteString(stdin, input+"\n")
-			if err != nil {
-				panic(err)
-			}
+			os.Exit(0)
+		case line := <-nextLine:
+			io.WriteString(replStdin, line+"\n")
 		}
-		fmt.Print("> ")
 	}
 }
