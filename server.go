@@ -80,22 +80,24 @@ func getOutput(reader io.ReadCloser, writer io.WriteCloser, bufSize int) error {
 	}
 }
 
-func (repl *Repl) SendReplStdOut(clientOutput io.WriteCloser) error {
-	err := getOutput(repl.ReplStdout, clientOutput, repl.BufSize)
+// Read REPL Output and send it to client
+func (repl *Repl) SendReplStdOut(clientInput io.WriteCloser) error {
+	err := getOutput(repl.ReplStdout, clientInput, repl.BufSize)
 
 	return err
 }
 
-func (repl *Repl) SendReplStdErr(clientOutput io.WriteCloser) error {
-	err := getOutput(repl.ReplStderr, clientOutput, repl.BufSize)
+// Read REPL Error and send it to client
+func (repl *Repl) SendReplStdErr(clientInput io.WriteCloser) error {
+	err := getOutput(repl.ReplStderr, clientInput, repl.BufSize)
 
 	return err
 }
 
-// WriteInput reads from main goroutine stdin, and sends lines
-// to subprocess goroutine through channel
-func (repl *Repl) SendToRepl(clientInput io.ReadCloser) error {
-	scanner := bufio.NewScanner(clientInput)
+// SendToRepl reads from client stdout, and sends lines
+// to repl stdin through channel
+func (repl *Repl) SendToRepl(clientOutput io.ReadCloser) error {
+	scanner := bufio.NewScanner(clientOutput)
 
 	for scanner.Scan() {
 		input := scanner.Text()
@@ -104,7 +106,7 @@ func (repl *Repl) SendToRepl(clientInput io.ReadCloser) error {
 	return scanner.Err()
 }
 
-// ProcessExit waits for subprocess to terminate and
+// ProcessExit waits for REPL to terminate and
 // handles it gracefully
 func (repl *Repl) ProcessExit() error {
 	if err := repl.Cmd.Wait(); err != nil {
@@ -114,7 +116,8 @@ func (repl *Repl) ProcessExit() error {
 	return nil
 }
 
-func (repl *Repl) Start(clientInput io.ReadCloser, clientOutput io.WriteCloser, clientErr io.WriteCloser) error {
+func (repl *Repl) Run(clientOutput io.ReadCloser, clientInput io.WriteCloser, clientErr io.WriteCloser) error {
+	// Start REPL
 	if err := repl.Cmd.Start(); err != nil {
 		return err
 	}
@@ -129,7 +132,7 @@ func (repl *Repl) Start(clientInput io.ReadCloser, clientOutput io.WriteCloser, 
 
 	// redirect stdout
 	go func() {
-		err := repl.SendReplStdOut(clientOutput)
+		err := repl.SendReplStdOut(clientInput)
 		if err != nil {
 			if err == io.EOF {
 				return
@@ -137,6 +140,7 @@ func (repl *Repl) Start(clientInput io.ReadCloser, clientOutput io.WriteCloser, 
 			repl.ErrChan <- err
 		}
 	}()
+
 	// redirect stderr
 	go func() {
 		err := repl.SendReplStdErr(clientErr)
@@ -147,9 +151,10 @@ func (repl *Repl) Start(clientInput io.ReadCloser, clientOutput io.WriteCloser, 
 			repl.ErrChan <- err
 		}
 	}()
+
 	// redirect stdin
 	go func() {
-		err := repl.SendToRepl(clientInput)
+		err := repl.SendToRepl(clientOutput)
 		if err != nil {
 			repl.ErrChan <- err
 		}
