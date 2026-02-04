@@ -63,7 +63,7 @@ func NewRepl(command string) (*Repl, error) {
 }
 
 // GetOutput reads from reader a bufsize amount until there is nothing to read
-func getOutput(reader io.ReadCloser, writer io.WriteCloser, bufSize int) error {
+func getOutput(reader io.Reader, writer io.Writer, bufSize int) error {
 	buf := make([]byte, bufSize)
 
 	for {
@@ -81,14 +81,14 @@ func getOutput(reader io.ReadCloser, writer io.WriteCloser, bufSize int) error {
 }
 
 // Read REPL Output and send it to client
-func (repl *Repl) SendReplStdOut(clientInput io.WriteCloser) error {
+func (repl *Repl) SendReplStdOut(clientInput io.Writer) error {
 	err := getOutput(repl.ReplStdout, clientInput, repl.BufSize)
 
 	return err
 }
 
 // Read REPL Error and send it to client
-func (repl *Repl) SendReplStdErr(clientInput io.WriteCloser) error {
+func (repl *Repl) SendReplStdErr(clientInput io.Writer) error {
 	err := getOutput(repl.ReplStderr, clientInput, repl.BufSize)
 
 	return err
@@ -96,7 +96,7 @@ func (repl *Repl) SendReplStdErr(clientInput io.WriteCloser) error {
 
 // SendToRepl reads from client stdout, and sends lines
 // to repl stdin through channel
-func (repl *Repl) SendToRepl(clientOutput io.ReadCloser) error {
+func (repl *Repl) SendToRepl(clientOutput io.Reader) error {
 	scanner := bufio.NewScanner(clientOutput)
 
 	for scanner.Scan() {
@@ -116,7 +116,7 @@ func (repl *Repl) ProcessExit() error {
 	return nil
 }
 
-func (repl *Repl) Run(clientOutput io.ReadCloser, clientInput io.WriteCloser, clientErr io.WriteCloser) error {
+func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr io.Writer) error {
 	// Start REPL
 	if err := repl.Cmd.Start(); err != nil {
 		return err
