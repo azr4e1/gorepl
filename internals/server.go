@@ -1,4 +1,4 @@
-package replserver
+package internals
 
 import (
 	"bufio"
@@ -46,7 +46,7 @@ func NewRepl(command string) (*Repl, error) {
 	// comms channels
 	done := make(chan bool)
 	nextLine := make(chan string)
-	errChan := make(chan error, 4)
+	errChan := make(chan error)
 
 	repl := &Repl{
 		Cmd:          cmd,

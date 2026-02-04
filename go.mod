@@ -1,4 +1,4 @@
-module github.com/azr4e1/send-to-repl
+module github.com/azr4e1/gorepl
 
 go 1.25.6
 
