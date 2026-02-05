@@ -1,9 +1,9 @@
 package internals
 
 import (
+	"fmt"
 	"io"
 	"log"
-	"os"
 	"sync"
 )
 
@@ -18,27 +18,16 @@ func (sw *syncWriter) Write(p []byte) (int, error) {
 	return sw.w.Write(p)
 }
 
-func newSyncWriter(w io.Writer) *syncWriter {
+func NewSyncWriter(w io.Writer) *syncWriter {
 	return &syncWriter{
 		mu: sync.Mutex{},
 		w:  w,
 	}
 }
 
-func NewSyncWriterFilename(filename string) (*syncWriter, error) {
-	w, err := os.Create(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	return &syncWriter{
-		mu: sync.Mutex{},
-		w:  w,
-	}, nil
-}
-
-func NewLogger(sw *syncWriter, prefix string) *log.Logger {
-	logger := log.New(sw, prefix, log.Ltime|log.Ldate|log.Lmsgprefix)
+func NewLogger(w io.Writer, name string) *log.Logger {
+	sw := NewSyncWriter(w)
+	logger := log.New(sw, fmt.Sprintf("%s: ", name), log.Ltime|log.Ldate|log.Lmsgprefix)
 
 	return logger
 }

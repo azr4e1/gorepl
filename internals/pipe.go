@@ -1,7 +1,6 @@
 package internals
 
 import (
-	// "bytes"
 	"errors"
 	"io"
 	"log"
@@ -10,36 +9,42 @@ import (
 
 type MultiPlexer struct {
 	// All FDs the pipe must read from
-	Inputs  []io.Reader
-	Outputs []io.Writer
-	// buffer  *bytes.Buffer
-	logger *log.Logger
+	inputs     []io.Reader
+	outputs    []*syncWriter
+	pipeReader *io.PipeReader
+	pipeWriter *io.PipeWriter
+	logger     *log.Logger
 }
 
 func NewMultiPlexer(inputs []io.Reader, output []io.Writer, logger *log.Logger) *MultiPlexer {
-	syncOutputs := []io.Writer{}
+	syncOutputs := []*syncWriter{}
 	for _, w := range output {
-		syncOutputs = append(syncOutputs, newSyncWriter(w))
+		syncOutputs = append(syncOutputs, NewSyncWriter(w))
 	}
+
+	pipeReader, pipeWriter := io.Pipe()
 	multiPlexer := &MultiPlexer{
-		Inputs:  inputs,
-		Outputs: syncOutputs,
-		// buffer:  new(bytes.Buffer),
-		logger: logger,
+		inputs:     inputs,
+		outputs:    syncOutputs,
+		pipeReader: pipeReader,
+		pipeWriter: pipeWriter,
+		logger:     logger,
 	}
+
+	go multiPlexer.listen()
 
 	return multiPlexer
 }
 
-func (mp *MultiPlexer) Broadcast(p []byte) error {
+func (mp *MultiPlexer) broadcast(p []byte) error {
 	errSlice := []error{}
 	var err error
-	for _, w := range mp.Outputs {
+	_, err = mp.pipeWriter.Write(p)
+	errSlice = append(errSlice, err)
+	for _, w := range mp.outputs {
 		_, err = w.Write(p)
 		errSlice = append(errSlice, err)
 	}
-	// _, err := mp.buffer.Write(p)
-	// errSlice = append(errSlice, err)
 
 	return errors.Join(errSlice...)
 }
@@ -54,7 +59,7 @@ func (mp *MultiPlexer) pipe(fd io.Reader) error {
 
 		if n > 0 {
 			mp.logger.Printf("read from input")
-			err := mp.Broadcast(buf[:n])
+			err := mp.broadcast(buf[:n])
 			if err != nil {
 				return err
 			}
@@ -63,9 +68,9 @@ func (mp *MultiPlexer) pipe(fd io.Reader) error {
 	}
 }
 
-func (mp *MultiPlexer) Listen() {
+func (mp *MultiPlexer) listen() {
 	var wg sync.WaitGroup
-	for _, i := range mp.Inputs {
+	for _, i := range mp.inputs {
 		input := i
 		wg.Add(1)
 		go func() {
@@ -78,32 +83,16 @@ func (mp *MultiPlexer) Listen() {
 	}
 	mp.logger.Printf("launched all goroutines")
 	mp.logger.Printf("listening")
-	wg.Wait()
-	// for {
-	// 	data := <-mp.bufChan
-	// 	mp.buffer = append(mp.buffer, data...)
-	// 	if n := mp.dataRequested; n > 0 {
-	// 		readN := min(n, len(mp.buffer))
-	// 		data := mp.buffer[:readN]
-	// 		mp.buffer = mp.buffer[readN:]
-	// 		mp.writeChan <- data
-	// 		mp.dataRequested = 0
-	// 	}
-	// 	mp.logger.Printf("multiplexer loop")
-	// }
 
+	wg.Wait()
+	err := mp.pipeWriter.Close()
+	if err != nil {
+		mp.logger.Print(err)
+	}
+	mp.logger.Printf("all streams closed")
 }
 
-// func (mp *MultiPlexer) Read(buf []byte) (int, error) {
-// 	bufLen := len(buf)
-// 	mp.dataRequested = bufLen
-// 	data := <-mp.writeChan
-// 	n := len(data)
-
-// 	for i := 0; i < n; i++ {
-// 		buf[i] = data[i]
-// 	}
-
-// 	mp.logger.Printf("read action")
-// 	return n, nil
-// }
+func (mp *MultiPlexer) Read(p []byte) (int, error) {
+	mp.logger.Print("reading from buffer")
+	return mp.pipeReader.Read(p)
+}
