@@ -24,6 +24,7 @@ func NewMultiPlexer(inputs []io.Reader, logger *log.Logger) *MultiPlexer {
 		bufChan:   make(chan []byte),
 		writeChan: make(chan []byte),
 		buffer:    []byte{},
+		logger:    logger,
 	}
 
 	go funnelReader.listen()
@@ -36,7 +37,7 @@ func (mp *MultiPlexer) readInput(fd io.Reader) error {
 	buf := make([]byte, BufSize)
 	for {
 		n, err := fd.Read(buf)
-		if err != nil && err != io.EOF {
+		if err != nil {
 			return err
 		}
 
