@@ -18,7 +18,14 @@ func (sw *syncWriter) Write(p []byte) (int, error) {
 	return sw.w.Write(p)
 }
 
-func NewSyncWriter(filename string) (*syncWriter, error) {
+func newSyncWriter(w io.Writer) *syncWriter {
+	return &syncWriter{
+		mu: sync.Mutex{},
+		w:  w,
+	}
+}
+
+func NewSyncWriterFilename(filename string) (*syncWriter, error) {
 	w, err := os.Create(filename)
 	if err != nil {
 		return nil, err
