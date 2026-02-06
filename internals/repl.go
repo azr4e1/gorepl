@@ -15,14 +15,15 @@ import (
 const BufSize = 4096
 
 type Repl struct {
-	Cmd        *exec.Cmd
+	cmd        *exec.Cmd
 	ReplStdin  io.WriteCloser
 	ReplStdout io.ReadCloser
 	ReplStderr io.ReadCloser
-	logger     *log.Logger
+	Logger     *log.Logger
+	ErrHandler ErrHandler
 }
 
-func NewRepl(command string, logger *log.Logger) (*Repl, error) {
+func NewRepl(command string) (*Repl, error) {
 	tokens, err := shlex.Split(command)
 	if err != nil {
 		return nil, err
@@ -44,11 +45,12 @@ func NewRepl(command string, logger *log.Logger) (*Repl, error) {
 	}
 
 	repl := &Repl{
-		Cmd:        cmd,
+		cmd:        cmd,
 		ReplStdin:  replStdin,
 		ReplStdout: replStdout,
 		ReplStderr: replStderr,
-		logger:     logger,
+		Logger:     DiscardLogger,
+		ErrHandler: DefaultErrHandler,
 	}
 
 	return repl, nil
@@ -69,7 +71,7 @@ func (repl *Repl) getOutput(name string, reader io.Reader, writer io.Writer) err
 				return err
 			}
 		}
-		repl.logger.Printf("%s just processed\n", name)
+		repl.Logger.Printf("%s just processed\n", name)
 	}
 }
 
@@ -95,17 +97,17 @@ func (repl *Repl) SendToRepl(clientOutput io.Reader) error {
 	for scanner.Scan() {
 		input := scanner.Text()
 		io.WriteString(repl.ReplStdin, input+"\n")
-		repl.logger.Printf("%s just scanned a line\n", "stdin")
+		repl.Logger.Printf("%s just scanned a line\n", "stdin")
 	}
 	return scanner.Err()
 }
 
 func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr io.Writer) error {
 	// Start REPL
-	if err := repl.Cmd.Start(); err != nil {
+	if err := repl.cmd.Start(); err != nil {
 		return err
 	}
-	repl.logger.Printf("process started")
+	repl.Logger.Printf("process started")
 
 	// redirect stdout
 	go func() {
@@ -114,11 +116,11 @@ func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr i
 			if err == io.EOF {
 				return
 			}
-			repl.logger.Print(err)
+			repl.ErrHandler(err)
 		}
-		repl.logger.Print("stdout closed")
+		repl.Logger.Print("stdout closed")
 	}()
-	repl.logger.Printf("launched stdout redirection")
+	repl.Logger.Printf("launched stdout redirection")
 
 	// redirect stderr
 	go func() {
@@ -127,37 +129,37 @@ func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr i
 			if err == io.EOF {
 				return
 			}
-			repl.logger.Print(err)
+			repl.ErrHandler(err)
 		}
-		repl.logger.Print("stderr closed")
+		repl.Logger.Print("stderr closed")
 	}()
-	repl.logger.Printf("launched stderr redirection")
+	repl.Logger.Printf("launched stderr redirection")
 
 	// redirect stdin
 	go func() {
 		err := repl.SendToRepl(clientOutput)
 		if err != nil {
-			repl.logger.Print(err)
+			repl.ErrHandler(err)
 			return
 		}
 
-		err = repl.Cmd.Cancel()
+		err = repl.cmd.Cancel()
 		if err != nil {
-			repl.logger.Print(err)
+			repl.ErrHandler(err)
 		}
-		repl.logger.Print("stdin closed")
+		repl.Logger.Print("stdin closed")
 	}()
-	repl.logger.Printf("launched stdin redirection")
+	repl.Logger.Printf("launched stdin redirection")
 
-	if err := repl.Cmd.Wait(); err != nil {
+	if err := repl.cmd.Wait(); err != nil {
 		var exitError *exec.ExitError
 		if errors.As(err, &exitError) {
-			repl.logger.Print("process interrupted")
+			repl.Logger.Print("process interrupted")
 			return nil
 		}
 		return err
 	}
-	repl.logger.Print("process terminated")
+	repl.Logger.Print("process terminated")
 
 	return nil
 }

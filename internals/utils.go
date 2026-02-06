@@ -7,6 +7,13 @@ import (
 	"sync"
 )
 
+var DiscardLogger = NewLogger(io.Discard, "")
+var DefaultErrHandler = func(err error) {
+	return
+}
+
+type ErrHandler func(error)
+
 type syncWriter struct {
 	mu sync.Mutex
 	w  io.Writer
@@ -27,7 +34,13 @@ func NewSyncWriter(w io.Writer) *syncWriter {
 
 func NewLogger(w io.Writer, name string) *log.Logger {
 	sw := NewSyncWriter(w)
-	logger := log.New(sw, fmt.Sprintf("%s: ", name), log.Ltime|log.Ldate|log.Lmsgprefix)
+	// prefix construction
+	sub := "%s"
+	if name != "" {
+		sub += ":"
+	}
+	sub += " "
+	logger := log.New(sw, fmt.Sprintf(sub, name), log.Ltime|log.Ldate|log.Lmsgprefix)
 
 	return logger
 }
