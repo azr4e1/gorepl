@@ -1,7 +1,10 @@
+// TODO: implement sync writers for buffers; use buffers for buffers - duh, instead of []bytes
 package internals
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"io"
 	"log"
 	"os/exec"
@@ -12,15 +15,11 @@ import (
 const BufSize = 4096
 
 type Repl struct {
-	Cmd          *exec.Cmd
-	ReplStdin    io.WriteCloser
-	ReplStdout   io.ReadCloser
-	ReplStderr   io.ReadCloser
-	DoneChan     chan bool
-	NextLineChan chan string
-	ErrChan      chan error
-	BufSize      int
-	logger       *log.Logger
+	Cmd        *exec.Cmd
+	ReplStdin  io.WriteCloser
+	ReplStdout io.ReadCloser
+	ReplStderr io.ReadCloser
+	logger     *log.Logger
 }
 
 func NewRepl(command string, logger *log.Logger) (*Repl, error) {
@@ -28,7 +27,7 @@ func NewRepl(command string, logger *log.Logger) (*Repl, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(tokens[0], tokens[1:]...)
+	cmd := exec.CommandContext(context.Background(), tokens[0], tokens[1:]...)
 
 	// pipes
 	replStdin, err := cmd.StdinPipe()
@@ -44,21 +43,12 @@ func NewRepl(command string, logger *log.Logger) (*Repl, error) {
 		return nil, err
 	}
 
-	// comms channels
-	done := make(chan bool)
-	nextLine := make(chan string)
-	errChan := make(chan error)
-
 	repl := &Repl{
-		Cmd:          cmd,
-		ReplStdin:    replStdin,
-		ReplStdout:   replStdout,
-		ReplStderr:   replStderr,
-		DoneChan:     done,
-		NextLineChan: nextLine,
-		ErrChan:      errChan,
-		BufSize:      BufSize,
-		logger:       logger,
+		Cmd:        cmd,
+		ReplStdin:  replStdin,
+		ReplStdout: replStdout,
+		ReplStderr: replStderr,
+		logger:     logger,
 	}
 
 	return repl, nil
@@ -66,7 +56,7 @@ func NewRepl(command string, logger *log.Logger) (*Repl, error) {
 
 // GetOutput reads from reader a bufsize amount until there is nothing to read
 func (repl *Repl) getOutput(name string, reader io.Reader, writer io.Writer) error {
-	buf := make([]byte, repl.BufSize)
+	buf := make([]byte, BufSize)
 
 	for {
 		n, err := reader.Read(buf)
@@ -98,27 +88,16 @@ func (repl *Repl) SendReplStdErr(clientInput io.Writer) error {
 }
 
 // SendToRepl reads from client stdout, and sends lines
-// to repl stdin through channel
+// to repl stdin
 func (repl *Repl) SendToRepl(clientOutput io.Reader) error {
 	scanner := bufio.NewScanner(clientOutput)
 
 	for scanner.Scan() {
 		input := scanner.Text()
-		repl.NextLineChan <- input
+		io.WriteString(repl.ReplStdin, input+"\n")
 		repl.logger.Printf("%s just scanned a line\n", "stdin")
 	}
 	return scanner.Err()
-}
-
-// ProcessExit waits for REPL to terminate and
-// handles it gracefully
-func (repl *Repl) ProcessExit() error {
-	if err := repl.Cmd.Wait(); err != nil {
-		log.Print(err)
-	}
-	repl.logger.Printf("process just terminated")
-	repl.DoneChan <- true
-	return nil
 }
 
 func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr io.Writer) error {
@@ -128,15 +107,6 @@ func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr i
 	}
 	repl.logger.Printf("process started")
 
-	// manage subprocess termination gracefully
-	go func() {
-		err := repl.ProcessExit()
-		if err != nil {
-			repl.ErrChan <- err
-		}
-	}()
-	repl.logger.Printf("launched termination handling")
-
 	// redirect stdout
 	go func() {
 		err := repl.SendReplStdOut(clientInput)
@@ -144,8 +114,9 @@ func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr i
 			if err == io.EOF {
 				return
 			}
-			repl.ErrChan <- err
+			repl.logger.Print(err)
 		}
+		repl.logger.Print("stdout closed")
 	}()
 	repl.logger.Printf("launched stdout redirection")
 
@@ -156,8 +127,9 @@ func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr i
 			if err == io.EOF {
 				return
 			}
-			repl.ErrChan <- err
+			repl.logger.Print(err)
 		}
+		repl.logger.Print("stderr closed")
 	}()
 	repl.logger.Printf("launched stderr redirection")
 
@@ -165,22 +137,27 @@ func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr i
 	go func() {
 		err := repl.SendToRepl(clientOutput)
 		if err != nil {
-			repl.ErrChan <- err
+			repl.logger.Print(err)
+			return
 		}
-		// reached EOF, break
-		repl.DoneChan <- true
+
+		err = repl.Cmd.Cancel()
+		if err != nil {
+			repl.logger.Print(err)
+		}
+		repl.logger.Print("stdin closed")
 	}()
 	repl.logger.Printf("launched stdin redirection")
 
-	for {
-		select {
-		case <-repl.DoneChan:
+	if err := repl.Cmd.Wait(); err != nil {
+		var exitError *exec.ExitError
+		if errors.As(err, &exitError) {
+			repl.logger.Print("process interrupted")
 			return nil
-		case line := <-repl.NextLineChan:
-			io.WriteString(repl.ReplStdin, line+"\n")
-		case err := <-repl.ErrChan:
-			return err
 		}
-		repl.logger.Println("select loop")
+		return err
 	}
+	repl.logger.Print("process terminated")
+
+	return nil
 }
