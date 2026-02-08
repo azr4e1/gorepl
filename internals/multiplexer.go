@@ -17,6 +17,7 @@ type MultiPlexer struct {
 	outputs    []*syncWriter
 	pipeReader *io.PipeReader
 	pipeWriter *io.PipeWriter
+	closeOnce  sync.Once
 	Logger     *log.Logger
 	Transform  TransformFunc
 	ErrHandler ErrHandler
@@ -89,7 +90,7 @@ func (mp *MultiPlexer) Listen() {
 	mp.Logger.Printf("listening")
 
 	wg.Wait()
-	err := mp.pipeWriter.Close()
+	err := mp.Close()
 	if err != nil {
 		mp.ErrHandler(err)
 	}
@@ -102,5 +103,10 @@ func (mp *MultiPlexer) Read(p []byte) (int, error) {
 }
 
 func (mp *MultiPlexer) Close() error {
-	return mp.pipeWriter.Close()
+	var err error
+	// only close once
+	mp.closeOnce.Do(func() {
+		err = mp.pipeWriter.Close()
+	})
+	return err
 }
