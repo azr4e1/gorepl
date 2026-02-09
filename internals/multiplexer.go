@@ -46,7 +46,8 @@ func (mp *MultiPlexer) pipe(fd io.Reader) error {
 
 		if n > 0 {
 			mp.Logger.Printf("read from input")
-			_, err := mp.pipeWriter.Write(buf[:n])
+			transformedBuf := mp.Transform(buf[:n])
+			_, err := mp.pipeWriter.Write(transformedBuf)
 			if err != nil {
 				return err
 			}
