@@ -69,7 +69,7 @@ func formatConnections(conns []Connection) string {
 		return "There are no connections at this location\n"
 	}
 	format := func(conn Connection) string {
-		return fmt.Sprintf("  Type:    %s\n  Address: %s\n", conn.Type, conn.Address)
+		return fmt.Sprintf("Connection:\n  Type:    %s\n  Address: %s\n", conn.Type, conn.Address)
 	}
 
 	connStr := []string{}
