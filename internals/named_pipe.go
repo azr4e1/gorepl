@@ -3,6 +3,7 @@ package internals
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path"
 
@@ -36,9 +37,9 @@ func GetNPipePathCurDir() (string, error) {
 }
 
 func MkTempFifo(tempDirPath string) (*TempNPipe, error) {
-	// check if dir exists; if so, remove it
+	// check if dir exists; if so, error
 	if ok, _ := Exists(tempDirPath); ok {
-		os.RemoveAll(tempDirPath)
+		return nil, errors.New("pipe already exist at this path")
 	}
 	err := os.Mkdir(tempDirPath, 0777)
 	if err != nil {
@@ -86,10 +87,10 @@ func (tnp *TempNPipe) Write(p []byte) (int, error) {
 }
 
 func (tnp *TempNPipe) Close() error {
-	err := tnp.fd.Close()
-	if err != nil {
-		return err
-	}
-	err = os.RemoveAll(tnp.TempDir)
+	return tnp.fd.Close()
+}
+
+func (tnp *TempNPipe) CleanUp() error {
+	err := os.RemoveAll(tnp.TempDir)
 	return err
 }
