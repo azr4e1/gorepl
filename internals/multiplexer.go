@@ -13,8 +13,7 @@ var DefaultTransformFunc = func(data []byte) []byte { return data }
 
 type MultiPlexer struct {
 	// All FDs the pipe must read from
-	inputs     []io.Reader
-	outputs    []*syncWriter
+	inputs     []io.ReadCloser
 	pipeReader *io.PipeReader
 	pipeWriter *io.PipeWriter
 	closeOnce  sync.Once
@@ -23,16 +22,10 @@ type MultiPlexer struct {
 	ErrHandler ErrHandler
 }
 
-func NewMultiPlexer(inputs []io.Reader, output []io.Writer) *MultiPlexer {
-	syncOutputs := []*syncWriter{}
-	for _, w := range output {
-		syncOutputs = append(syncOutputs, NewSyncWriter(w))
-	}
-
+func NewMultiPlexer(inputs ...io.ReadCloser) *MultiPlexer {
 	pipeReader, pipeWriter := io.Pipe()
 	multiPlexer := &MultiPlexer{
 		inputs:     inputs,
-		outputs:    syncOutputs,
 		pipeReader: pipeReader,
 		pipeWriter: pipeWriter,
 		Logger:     DiscardLogger,
@@ -41,19 +34,6 @@ func NewMultiPlexer(inputs []io.Reader, output []io.Writer) *MultiPlexer {
 	}
 
 	return multiPlexer
-}
-
-func (mp *MultiPlexer) broadcast(p []byte) error {
-	errSlice := []error{}
-	var err error
-	_, err = mp.pipeWriter.Write(p)
-	errSlice = append(errSlice, err)
-	for _, w := range mp.outputs {
-		_, err = w.Write(mp.Transform(p))
-		errSlice = append(errSlice, err)
-	}
-
-	return errors.Join(errSlice...)
 }
 
 func (mp *MultiPlexer) pipe(fd io.Reader) error {
@@ -66,7 +46,7 @@ func (mp *MultiPlexer) pipe(fd io.Reader) error {
 
 		if n > 0 {
 			mp.Logger.Printf("read from input")
-			err := mp.broadcast(buf[:n])
+			_, err := mp.pipeWriter.Write(buf[:n])
 			if err != nil {
 				return err
 			}
@@ -106,7 +86,12 @@ func (mp *MultiPlexer) Close() error {
 	var err error
 	// only close once
 	mp.closeOnce.Do(func() {
-		err = mp.pipeWriter.Close()
+		errList := []error{}
+		errList = append(errList, mp.pipeWriter.Close())
+		for _, i := range mp.inputs {
+			errList = append(errList, i.Close())
+		}
+		err = errors.Join(errList...)
 	})
 	return err
 }
