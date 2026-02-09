@@ -120,7 +120,7 @@ func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr i
 	go func() {
 		err := repl.SendReplStdErr(clientErr, replStderr)
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return
 			}
 			repl.ErrHandler(err)
@@ -137,9 +137,13 @@ func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr i
 			return
 		}
 
-		err = cmd.Cancel()
-		if err != nil {
-			repl.ErrHandler(err)
+		// if stdin is closed but program is still running
+		// time to kill it
+		if cmd.ProcessState == nil {
+			err = cmd.Cancel()
+			if err != nil {
+				repl.ErrHandler(err)
+			}
 		}
 		repl.Logger.Print("stdin closed")
 	}()
