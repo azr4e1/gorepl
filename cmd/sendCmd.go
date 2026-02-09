@@ -15,7 +15,6 @@ var (
 		Use:   "send",
 		Short: "Send data to repl",
 		Run:   Send,
-		// Args:  cobra.MaximumNArgs(1),
 	}
 )
 
@@ -28,17 +27,18 @@ func Send(command *cobra.Command, args []string) {
 	if err != nil {
 		cobra.CheckErr(err)
 	}
+	defer nPipe.Close()
 	fi, _ := os.Stdin.Stat()
 
 	var lines []byte
 	if (fi.Mode() & os.ModeCharDevice) == 0 {
 		lines, _ = io.ReadAll(os.Stdin)
 	} else {
-		lines = []byte(fmt.Sprintln(strings.Join(args, "")))
-	}
-	if len(lines) == 0 {
-		command.Help()
-		os.Exit(0)
+		if len(args) == 0 {
+			command.Help()
+			os.Exit(0)
+		}
+		lines = fmt.Appendln(nil, strings.Join(args, ""))
 	}
 	_, err = nPipe.Write(lines)
 	if err != nil {

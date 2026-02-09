@@ -8,7 +8,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/azr4e1/gorepl/internals"
@@ -20,7 +19,6 @@ var (
 		Use:   "run",
 		Short: "Run the shell",
 		Run:   Run,
-		Args:  cobra.MaximumNArgs(1),
 	}
 )
 
@@ -37,11 +35,15 @@ func Run(command *cobra.Command, args []string) {
 	if err != nil {
 		cobra.CheckErr(err)
 	}
+	defer pipe.CleanUp()
 
 	logTime := time.Now().Format("2006-01-02T15:04:05")
 	logPath := os.ExpandEnv("$HOME/.cache/gorepl")
 	if ok, _ := internals.Exists(logPath); !ok {
-		os.MkdirAll(logPath, 0777)
+		err := os.MkdirAll(logPath, 0777)
+		if err != nil {
+			cobra.CheckErr(err)
+		}
 	}
 	logFd, err := os.Create(fmt.Sprintf(path.Join(logPath, "%s-logs"), logTime))
 	if err != nil {
@@ -54,7 +56,7 @@ func Run(command *cobra.Command, args []string) {
 		cobra.CheckErr(err)
 	}
 	replLogger := internals.NewLogger(logFd, "Repl")
-	replErr := func(err error) { replLogger.Print("err: ", err) }
+	replErr := func(err error) { replLogger.Print("Error: ", err) }
 	repl.ErrHandler = replErr
 	repl.Logger = replLogger
 
@@ -65,30 +67,31 @@ func Run(command *cobra.Command, args []string) {
 	mpErr := func(err error) {
 		if errors.Is(err, io.EOF) {
 			err = mp.Close()
-			mpLogger.Print("err: ", err)
+			if err != nil {
+				mpLogger.Print("Error: ", err)
+			}
 			return
 		}
 		// check if pipe was closed
 		var pipeError *fs.PathError
 		if errors.As(err, &pipeError) {
-			mpLogger.Print("err: ", err)
+			mpLogger.Print("Error: ", err)
 			err = mp.Close()
-			mpLogger.Print("err: ", err)
+			if err != nil {
+				mpLogger.Print("Error: ", err)
+			}
 			return
 		}
-		mpLogger.Print("err: ", err)
+		mpLogger.Print("Error: ", err)
 	}
 	mp.Logger = mpLogger
 	mp.ErrHandler = mpErr
 
-	var wg sync.WaitGroup
-	wg.Go(mp.Listen)
+	go mp.Listen()
 	if err := repl.Run(mp, syncOutput, os.Stderr); err != nil {
 		cobra.CheckErr(err)
 	}
-	pipe.Close()
 	mp.Close()
-	wg.Wait()
 }
 
 func init() {
