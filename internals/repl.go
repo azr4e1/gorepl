@@ -15,40 +15,14 @@ import (
 const BufSize = 4096
 
 type Repl struct {
-	cmd        *exec.Cmd
-	ReplStdin  io.WriteCloser
-	ReplStdout io.ReadCloser
-	ReplStderr io.ReadCloser
+	cmd        string
 	Logger     *log.Logger
 	ErrHandler ErrHandler
 }
 
 func NewRepl(command string) (*Repl, error) {
-	tokens, err := shlex.Split(command)
-	if err != nil {
-		return nil, err
-	}
-	cmd := exec.CommandContext(context.Background(), tokens[0], tokens[1:]...)
-
-	// pipes
-	replStdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, err
-	}
-	replStdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	replStderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, err
-	}
-
 	repl := &Repl{
-		cmd:        cmd,
-		ReplStdin:  replStdin,
-		ReplStdout: replStdout,
-		ReplStderr: replStderr,
+		cmd:        command,
 		Logger:     DiscardLogger,
 		ErrHandler: DefaultErrHandler,
 	}
@@ -76,42 +50,62 @@ func (repl *Repl) getOutput(name string, reader io.Reader, writer io.Writer) err
 }
 
 // Read REPL Output and send it to client
-func (repl *Repl) SendReplStdOut(clientInput io.Writer) error {
-	err := repl.getOutput("stdout", repl.ReplStdout, clientInput)
+func (repl *Repl) SendReplStdOut(clientInput io.Writer, replStdout io.Reader) error {
+	err := repl.getOutput("stdout", replStdout, clientInput)
 
 	return err
 }
 
 // Read REPL Error and send it to client
-func (repl *Repl) SendReplStdErr(clientInput io.Writer) error {
-	err := repl.getOutput("stderr", repl.ReplStderr, clientInput)
+func (repl *Repl) SendReplStdErr(clientInput io.Writer, replStderr io.Reader) error {
+	err := repl.getOutput("stderr", replStderr, clientInput)
 
 	return err
 }
 
 // SendToRepl reads from client stdout, and sends lines
 // to repl stdin
-func (repl *Repl) SendToRepl(clientOutput io.Reader) error {
+func (repl *Repl) SendReplStdin(clientOutput io.Reader, replStdin io.Writer) error {
 	scanner := bufio.NewScanner(clientOutput)
 
 	for scanner.Scan() {
 		input := scanner.Text()
-		io.WriteString(repl.ReplStdin, input+"\n")
+		io.WriteString(replStdin, input+"\n")
 		repl.Logger.Printf("%s just scanned a line\n", "stdin")
 	}
 	return scanner.Err()
 }
 
 func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr io.Writer) error {
+	tokens, err := shlex.Split(repl.cmd)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(context.Background(), tokens[0], tokens[1:]...)
+
+	// pipes
+	replStdin, err := cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+	replStdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	replStderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
 	// Start REPL
-	if err := repl.cmd.Start(); err != nil {
+	if err := cmd.Start(); err != nil {
 		return err
 	}
 	repl.Logger.Printf("process started")
 
 	// redirect stdout
 	go func() {
-		err := repl.SendReplStdOut(clientInput)
+		err := repl.SendReplStdOut(clientInput, replStdout)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return
@@ -124,7 +118,7 @@ func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr i
 
 	// redirect stderr
 	go func() {
-		err := repl.SendReplStdErr(clientErr)
+		err := repl.SendReplStdErr(clientErr, replStderr)
 		if err != nil {
 			if err == io.EOF {
 				return
@@ -137,13 +131,13 @@ func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr i
 
 	// redirect stdin
 	go func() {
-		err := repl.SendToRepl(clientOutput)
+		err := repl.SendReplStdin(clientOutput, replStdin)
 		if err != nil {
 			repl.ErrHandler(err)
 			return
 		}
 
-		err = repl.cmd.Cancel()
+		err = cmd.Cancel()
 		if err != nil {
 			repl.ErrHandler(err)
 		}
@@ -151,7 +145,7 @@ func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr i
 	}()
 	repl.Logger.Printf("launched stdin redirection")
 
-	if err := repl.cmd.Wait(); err != nil {
+	if err := cmd.Wait(); err != nil {
 		var exitError *exec.ExitError
 		if errors.As(err, &exitError) {
 			repl.Logger.Print("process interrupted")
