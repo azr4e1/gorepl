@@ -56,8 +56,21 @@ func sendNamedPipe(command *cobra.Command, args []string) error {
 			command.Help()
 			os.Exit(0)
 		}
-		lines = fmt.Appendln(nil, strings.Join(args, ""))
+		lines = fmt.Appendln(nil, strings.Join(args, " "))
 	}
-	_, err = nPipe.Write(lines)
+	_, err = nPipe.Write(preprocess(lines))
 	return err
+}
+
+func preprocess(buf []byte) []byte {
+	lines := strings.Split(string(buf), "\n")
+	cleanLines := []string{}
+	for _, l := range lines {
+		if strings.TrimSpace(l) == "" {
+			continue
+		}
+		cleanLines = append(cleanLines, strings.TrimRight(l, "\n\t "))
+	}
+	bufString := strings.Join(cleanLines, "\n") + "\n"
+	return []byte(bufString)
 }

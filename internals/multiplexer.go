@@ -7,10 +7,6 @@ import (
 	"sync"
 )
 
-type TransformFunc func(data []byte) []byte
-
-var DefaultTransformFunc = func(data []byte) []byte { return data }
-
 type MultiPlexer struct {
 	// All FDs the pipe must read from
 	inputs     []io.ReadCloser
@@ -18,7 +14,6 @@ type MultiPlexer struct {
 	pipeWriter *io.PipeWriter
 	closeOnce  sync.Once
 	Logger     *log.Logger
-	Transform  TransformFunc
 	ErrHandler ErrHandler
 }
 
@@ -29,7 +24,6 @@ func NewMultiPlexer(inputs ...io.ReadCloser) *MultiPlexer {
 		pipeReader: pipeReader,
 		pipeWriter: pipeWriter,
 		Logger:     DiscardLogger,
-		Transform:  DefaultTransformFunc,
 		ErrHandler: DefaultErrHandler,
 	}
 
@@ -46,8 +40,7 @@ func (mp *MultiPlexer) pipe(fd io.Reader) error {
 
 		if n > 0 {
 			mp.Logger.Printf("read from input")
-			transformedBuf := mp.Transform(buf[:n])
-			_, err := mp.pipeWriter.Write(transformedBuf)
+			_, err := mp.pipeWriter.Write(buf[:n])
 			if err != nil {
 				return err
 			}

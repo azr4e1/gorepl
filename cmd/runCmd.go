@@ -22,19 +22,6 @@ var (
 	}
 )
 
-func TransformFunc(buf []byte) []byte {
-	lines := strings.Split(string(buf), "\n")
-	cleanLines := []string{}
-	for _, l := range lines {
-		if strings.TrimSpace(l) == "" {
-			continue
-		}
-		cleanLines = append(cleanLines, l)
-	}
-	cleanLines = append(cleanLines, "\n")
-	return []byte(strings.Join(cleanLines, "\n"))
-}
-
 func Run(command *cobra.Command, args []string) {
 	if len(args) == 0 {
 		command.Help()
@@ -122,7 +109,6 @@ func runNamedPipe(args []string) error {
 	}
 	mp.Logger = mpLogger
 	mp.ErrHandler = mpErr
-	mp.Transform = TransformFunc
 
 	// listen for incoming data
 	go mp.Listen()
