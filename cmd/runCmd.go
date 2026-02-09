@@ -39,7 +39,7 @@ func Run(command *cobra.Command, args []string) {
 func init() {
 	rootCmd.AddCommand(runCmd)
 	runCmd.Flags().BoolVarP(&namedPipeVar, "named-pipe", "n", true, "Connect to a named pipe")
-	runCmd.Flags().BoolVarP(&force, "force", "f", false, "Force connection and start of repl")
+	runCmd.Flags().BoolVarP(&forceVar, "force", "f", false, "Force connection and start of repl")
 }
 
 func runNamedPipe(args []string) error {
@@ -49,7 +49,7 @@ func runNamedPipe(args []string) error {
 		return err
 	}
 
-	pipe, err := internals.MkTempFifo(tempDirPath, force)
+	pipe, err := internals.MkTempFifo(tempDirPath, forceVar)
 	if err != nil {
 		return err
 	}

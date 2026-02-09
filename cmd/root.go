@@ -10,7 +10,8 @@ const Version = "v0.1.0"
 
 var (
 	namedPipeVar bool
-	force        bool
+	forceVar     bool
+	jsonVar      bool
 	rootCmd      = &cobra.Command{
 		Use:     "gorepl",
 		Short:   "A repl multiplexer",
