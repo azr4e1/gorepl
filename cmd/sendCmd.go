@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -19,15 +20,32 @@ var (
 )
 
 func Send(command *cobra.Command, args []string) {
+	if namedPipeVar {
+		err := sendNamedPipe(command, args)
+		if err != nil {
+			cobra.CheckErr(err)
+		}
+	}
+}
+
+func init() {
+	rootCmd.AddCommand(sendCmd)
+	sendCmd.Flags().BoolVarP(&namedPipeVar, "named-pipe", "n", true, "Connect to a named pipe")
+}
+
+func sendNamedPipe(command *cobra.Command, args []string) error {
+	// get connection
 	tempDirPath, err := internals.GetNPipePathCurDir()
 	if err != nil {
-		cobra.CheckErr(err)
+		return err
 	}
 	nPipe, err := internals.NewTempFifo(tempDirPath)
 	if err != nil {
-		cobra.CheckErr(err)
+		return errors.New("Couldn't connect to a named pipe. Are you sure your repl is running in this directory?")
 	}
 	defer nPipe.Close()
+
+	// determine if we are getting piped
 	fi, _ := os.Stdin.Stat()
 
 	var lines []byte
@@ -41,11 +59,5 @@ func Send(command *cobra.Command, args []string) {
 		lines = fmt.Appendln(nil, strings.Join(args, ""))
 	}
 	_, err = nPipe.Write(lines)
-	if err != nil {
-		cobra.CheckErr(err)
-	}
-}
-
-func init() {
-	rootCmd.AddCommand(sendCmd)
+	return err
 }
