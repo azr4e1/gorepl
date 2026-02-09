@@ -2,11 +2,14 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/azr4e1/gorepl/internals"
 	"github.com/spf13/cobra"
@@ -26,13 +29,21 @@ func Run(command *cobra.Command, args []string) {
 		command.Help()
 		os.Exit(0)
 	}
-	// TODO: create directory specific pipe
-	pipe, err := internals.MkTempFifo("test")
+	tempDirPath, err := internals.GetNPipePathCurDir()
+	if err != nil {
+		cobra.CheckErr(err)
+	}
+	pipe, err := internals.MkTempFifo(tempDirPath)
 	if err != nil {
 		cobra.CheckErr(err)
 	}
 
-	logFd, err := os.Create("logs")
+	logTime := time.Now().Format("2006-01-02T15:04:05")
+	logPath := os.ExpandEnv("$HOME/.cache/gorepl")
+	if ok, _ := internals.Exists(logPath); !ok {
+		os.MkdirAll(logPath, 0777)
+	}
+	logFd, err := os.Create(fmt.Sprintf(path.Join(logPath, "%s-logs"), logTime))
 	if err != nil {
 		cobra.CheckErr(err)
 	}
@@ -48,21 +59,24 @@ func Run(command *cobra.Command, args []string) {
 	repl.Logger = replLogger
 
 	syncOutput := internals.NewSyncWriter(os.Stdout)
-	mp := internals.NewMultiPlexer([]io.Reader{pipe, os.Stdin}, []io.Writer{syncOutput})
-	defer mp.Close()
+	pipeEcho := internals.NewReaderWithEcho(pipe, syncOutput)
+	mp := internals.NewMultiPlexer(pipeEcho, os.Stdin)
 	mpLogger := internals.NewLogger(logFd, "MultiPlexer")
 	mpErr := func(err error) {
 		if errors.Is(err, io.EOF) {
-			mp.Close()
+			err = mp.Close()
+			mpLogger.Print("err: ", err)
 			return
 		}
 		// check if pipe was closed
 		var pipeError *fs.PathError
 		if errors.As(err, &pipeError) {
+			mpLogger.Print("err: ", err)
+			err = mp.Close()
+			mpLogger.Print("err: ", err)
 			return
 		}
-		mpLogger.Printf("err: %T, %s", err, err)
-		// mpLogger.Print("err: ", err)
+		mpLogger.Print("err: ", err)
 	}
 	mp.Logger = mpLogger
 	mp.ErrHandler = mpErr
@@ -73,6 +87,7 @@ func Run(command *cobra.Command, args []string) {
 		cobra.CheckErr(err)
 	}
 	pipe.Close()
+	mp.Close()
 	wg.Wait()
 }
 

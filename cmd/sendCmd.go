@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -14,15 +15,11 @@ var (
 		Use:   "send",
 		Short: "Send data to repl",
 		Run:   Send,
-		Args:  cobra.MaximumNArgs(1),
+		// Args:  cobra.MaximumNArgs(1),
 	}
 )
 
 func Send(command *cobra.Command, args []string) {
-	if len(args) == 0 {
-		command.Help()
-		os.Exit(0)
-	}
 	tempDirPath, err := internals.GetNPipePathCurDir()
 	if err != nil {
 		cobra.CheckErr(err)
@@ -31,8 +28,19 @@ func Send(command *cobra.Command, args []string) {
 	if err != nil {
 		cobra.CheckErr(err)
 	}
-	cmd := []byte(fmt.Sprintln(strings.Join(args, " ")))
-	_, err = nPipe.Write(cmd)
+	fi, _ := os.Stdin.Stat()
+
+	var lines []byte
+	if (fi.Mode() & os.ModeCharDevice) == 0 {
+		lines, _ = io.ReadAll(os.Stdin)
+	} else {
+		lines = []byte(fmt.Sprintln(strings.Join(args, "")))
+	}
+	if len(lines) == 0 {
+		command.Help()
+		os.Exit(0)
+	}
+	_, err = nPipe.Write(lines)
 	if err != nil {
 		cobra.CheckErr(err)
 	}
