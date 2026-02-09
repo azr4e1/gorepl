@@ -36,10 +36,16 @@ func GetNPipePathCurDir() (string, error) {
 	return tempPath, err
 }
 
-func MkTempFifo(tempDirPath string) (*TempNPipe, error) {
-	// check if dir exists; if so, error
+func MkTempFifo(tempDirPath string, force bool) (*TempNPipe, error) {
+	// check if dir exists; if so, error unless forced
 	if ok, _ := Exists(tempDirPath); ok {
-		return nil, errors.New("pipe already exist at this path")
+		if !force {
+			return nil, errors.New("pipe already exists at this path")
+		}
+		err := os.RemoveAll(tempDirPath)
+		if err != nil {
+			return nil, err
+		}
 	}
 	err := os.Mkdir(tempDirPath, 0777)
 	if err != nil {
