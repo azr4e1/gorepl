@@ -33,7 +33,7 @@ func GetNPipePathCurDir() (string, error) {
 	tempDir := os.TempDir()
 
 	tempPath := path.Join(tempDir, "gorepl_"+hexString)
-	return tempPath, err
+	return tempPath, nil
 }
 
 func MkTempFifo(tempDirPath string, force bool) (*TempNPipe, error) {
