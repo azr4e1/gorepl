@@ -31,13 +31,13 @@ func GetNPipePathCurDir() (string, error) {
 	hexString := hex.EncodeToString(res)
 	tempDir := os.TempDir()
 
-	tempPath := path.Join(tempDir, hexString)
+	tempPath := path.Join(tempDir, "gorepl_"+hexString)
 	return tempPath, err
 }
 
 func MkTempFifo(tempDirPath string) (*TempNPipe, error) {
 	// check if dir exists; if so, remove it
-	if ok, _ := exists(tempDirPath); ok {
+	if ok, _ := Exists(tempDirPath); ok {
 		os.RemoveAll(tempDirPath)
 	}
 	err := os.Mkdir(tempDirPath, 0777)

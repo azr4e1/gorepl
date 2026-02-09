@@ -75,7 +75,7 @@ func (re *ReaderWithEcho) Close() error {
 // Source - https://stackoverflow.com/a/10510783
 // Posted by Mostafa, modified by community. See post 'Timeline' for change history
 // Retrieved 2026-02-09, License - CC BY-SA 4.0
-func exists(path string) (bool, error) {
+func Exists(path string) (bool, error) {
 	_, err := os.Stat(path)
 	if err == nil {
 		return true, nil
