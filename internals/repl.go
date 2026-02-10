@@ -138,7 +138,9 @@ func (repl *Repl) Run(clientOutput io.Reader, clientInput io.Writer, clientErr i
 		}
 
 		// if stdin is closed but program is still running
-		// time to kill it
+		// time to kill it. If program exits, it writes to
+		// cmd.ProcessState. If cmd.ProcessState is nil,
+		// it means cmd is still running
 		if cmd.ProcessState == nil {
 			err = cmd.Cancel()
 			if err != nil {

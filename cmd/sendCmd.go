@@ -50,7 +50,10 @@ func sendNamedPipe(command *cobra.Command, args []string) error {
 
 	var lines []byte
 	if (fi.Mode() & os.ModeCharDevice) == 0 {
-		lines, _ = io.ReadAll(os.Stdin)
+		lines, err = io.ReadAll(os.Stdin)
+		if err != nil {
+			return err
+		}
 	} else {
 		if len(args) == 0 {
 			command.Help()

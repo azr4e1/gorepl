@@ -97,6 +97,7 @@ func (tnp *TempNPipe) Close() error {
 }
 
 func (tnp *TempNPipe) CleanUp() error {
+	tnp.Close() // ignore err, best effort
 	err := os.RemoveAll(tnp.TempDir)
 	return err
 }
