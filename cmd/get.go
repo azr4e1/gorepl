@@ -93,5 +93,5 @@ func marshallConnectionsJSON(conns []Connection) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(res), nil
+	return string(res) + "\n", nil
 }
