@@ -46,12 +46,12 @@ func init() {
 
 func runNamedPipe(args []string) error {
 	// connect to pipe
-	tempDirPath, err := internals.GetNPipePathCurDir()
+	tempPath, err := internals.GetPathCurDir()
 	if err != nil {
 		return err
 	}
 
-	pipe, err := internals.MkTempFifo(tempDirPath, forceVar)
+	pipe, err := internals.MkTempFifo(tempPath, forceVar)
 	if err != nil {
 		return err
 	}
@@ -63,7 +63,7 @@ func runNamedPipe(args []string) error {
 	signal.Notify(c, os.Interrupt, syscall.SIGINT)
 	go func() {
 		<-c
-		fmt.Fprintln(os.Stderr, "Process interrupted, proceeding to cleanup")
+		fmt.Fprintln(os.Stderr, "\nProcess interrupted, proceeding to cleanup")
 		pipe.CleanUp()
 		os.Exit(1)
 	}()

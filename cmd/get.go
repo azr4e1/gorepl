@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 	"strings"
 
 	"github.com/azr4e1/gorepl/internals"
@@ -49,11 +48,11 @@ func init() {
 }
 
 func getNamedPipe() ([]Connection, error) {
-	tempDir, err := internals.GetNPipePathCurDir()
+	tempPath, err := internals.GetPathCurDir()
 	if err != nil {
 		return []Connection{}, err
 	}
-	nPipePath := path.Join(tempDir, internals.NPipeName)
+	nPipePath := internals.GenerateNPipePath(tempPath)
 	ok, err := internals.Exists(nPipePath)
 	if err != nil {
 		return []Connection{}, err

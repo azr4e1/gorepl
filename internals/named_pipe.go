@@ -1,84 +1,61 @@
 package internals
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"os"
-	"path"
+	"strings"
 
 	"golang.org/x/sys/unix"
 )
 
-const NPipeName = "gorepl_named_pipe"
+const NPipeName = "named_pipe"
 
 type TempNPipe struct {
-	TempDir string
-	Name    string
+	Address string
 	fd      *os.File
 }
 
-func GetNPipePathCurDir() (string, error) {
-	curPath, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	hash := sha256.New()
-	_, err = hash.Write([]byte(curPath))
-	if err != nil {
-		return "", err
-	}
-	res := hash.Sum([]byte("_gorepl"))
-	hexString := hex.EncodeToString(res)
-	tempDir := os.TempDir()
-
-	tempPath := path.Join(tempDir, "gorepl_"+hexString)
-	return tempPath, nil
+func GenerateNPipePath(tempPath string) string {
+	return strings.Join([]string{tempPath, NPipeName}, "_")
 }
 
-func MkTempFifo(tempDirPath string, force bool) (*TempNPipe, error) {
+func MkTempFifo(tempPath string, force bool) (*TempNPipe, error) {
 	// check if dir exists; if so, error unless forced
-	if ok, _ := Exists(tempDirPath); ok {
+	if ok, _ := Exists(tempPath); ok {
 		if !force {
-			return nil, errors.New("pipe already exists at this path")
+			return nil, errors.New("pipe already exists at this address")
 		}
-		err := os.RemoveAll(tempDirPath)
+		err := os.Remove(tempPath)
 		if err != nil {
 			return nil, err
 		}
 	}
-	err := os.Mkdir(tempDirPath, 0777)
-	if err != nil {
-		return nil, err
-	}
-	npipePath := path.Join(tempDirPath, NPipeName)
-	err = unix.Mkfifo(npipePath, 0666)
+	npipePath := GenerateNPipePath(tempPath)
+	err := unix.Mkfifo(npipePath, 0666)
 	if err != nil {
 		return nil, err
 	}
 	fd, err := os.OpenFile(npipePath, os.O_RDWR, 0)
 	if err != nil {
-		os.RemoveAll(tempDirPath)
+		os.RemoveAll(tempPath)
 		return nil, err
 	}
 
 	return &TempNPipe{
-		TempDir: tempDirPath,
-		Name:    npipePath,
+		Address: npipePath,
 		fd:      fd,
 	}, nil
 }
 
-func NewTempFifo(tempDirPath string) (*TempNPipe, error) {
-	npipePath := path.Join(tempDirPath, NPipeName)
+func NewTempFifo(tempPath string) (*TempNPipe, error) {
+	npipePath := GenerateNPipePath(tempPath)
 	fd, err := os.OpenFile(npipePath, os.O_RDWR, 0)
 	if err != nil {
 		return nil, err
 	}
 
 	return &TempNPipe{
-		TempDir: tempDirPath,
-		Name:    npipePath,
+		Address: npipePath,
 		fd:      fd,
 	}, nil
 
@@ -98,6 +75,6 @@ func (tnp *TempNPipe) Close() error {
 
 func (tnp *TempNPipe) CleanUp() error {
 	tnp.Close() // ignore err, best effort
-	err := os.RemoveAll(tnp.TempDir)
+	err := os.Remove(tnp.Address)
 	return err
 }

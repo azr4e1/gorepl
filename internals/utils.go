@@ -1,12 +1,15 @@
 package internals
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"log"
 	"os"
+	"path"
 	"sync"
 )
 
@@ -84,4 +87,22 @@ func Exists(path string) (bool, error) {
 		return false, nil
 	}
 	return false, err
+}
+
+func GetPathCurDir() (string, error) {
+	curPath, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.New()
+	_, err = hash.Write([]byte(curPath))
+	if err != nil {
+		return "", err
+	}
+	res := hash.Sum([]byte("_gorepl"))
+	hexString := hex.EncodeToString(res)
+	tempDir := os.TempDir()
+
+	tempPath := path.Join(tempDir, "gorepl_"+hexString)
+	return tempPath, nil
 }

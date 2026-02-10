@@ -35,11 +35,11 @@ func init() {
 
 func sendNamedPipe(command *cobra.Command, args []string) error {
 	// get connection
-	tempDirPath, err := internals.GetNPipePathCurDir()
+	tempPath, err := internals.GetPathCurDir()
 	if err != nil {
 		return err
 	}
-	nPipe, err := internals.NewTempFifo(tempDirPath)
+	nPipe, err := internals.NewTempFifo(tempPath)
 	if err != nil {
 		return errors.New("Couldn't connect to a named pipe. Are you sure your repl is running in this directory?")
 	}
