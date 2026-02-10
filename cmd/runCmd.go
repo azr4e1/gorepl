@@ -6,8 +6,10 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/signal"
 	"path"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/azr4e1/gorepl/internals"
@@ -53,7 +55,18 @@ func runNamedPipe(args []string) error {
 	if err != nil {
 		return err
 	}
+	// Cleanup when exiting normally
 	defer pipe.CleanUp()
+
+	// handle process interruption
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGINT)
+	go func() {
+		<-c
+		fmt.Fprintln(os.Stderr, "Process interrupted, proceeding to cleanup")
+		pipe.CleanUp()
+		os.Exit(1)
+	}()
 
 	// create loggers
 	logTime := time.Now().Format("2006-01-02T15:04:05")
