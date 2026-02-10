@@ -46,7 +46,10 @@ func sendNamedPipe(command *cobra.Command, args []string) error {
 	defer nPipe.Close()
 
 	// determine if we are getting piped
-	fi, _ := os.Stdin.Stat()
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return err
+	}
 
 	var lines []byte
 	if (fi.Mode() & os.ModeCharDevice) == 0 {
