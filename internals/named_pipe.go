@@ -21,23 +21,23 @@ func GenerateNPipePath(tempPath string) string {
 
 func MkTempFifo(tempPath string, force bool) (*TempNPipe, error) {
 	// check if dir exists; if so, error unless forced
-	if ok, _ := Exists(tempPath); ok {
+	npipePath := GenerateNPipePath(tempPath)
+	if ok, _ := Exists(npipePath); ok {
 		if !force {
 			return nil, errors.New("pipe already exists at this address")
 		}
-		err := os.Remove(tempPath)
+		err := os.Remove(npipePath)
 		if err != nil {
 			return nil, err
 		}
 	}
-	npipePath := GenerateNPipePath(tempPath)
 	err := unix.Mkfifo(npipePath, 0666)
 	if err != nil {
 		return nil, err
 	}
 	fd, err := os.OpenFile(npipePath, os.O_RDWR, 0)
 	if err != nil {
-		os.RemoveAll(tempPath)
+		os.Remove(npipePath)
 		return nil, err
 	}
 
