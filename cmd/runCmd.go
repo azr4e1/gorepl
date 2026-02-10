@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"os"
 	"os/signal"
 	"path"
@@ -44,6 +45,49 @@ func init() {
 	runCmd.Flags().BoolVarP(&forceVar, "force", "f", false, "Force connection and start of repl")
 }
 
+func runUDS(args []string) error {
+	tempPath, err := internals.GetPathCurDir()
+	if err != nil {
+		return err
+	}
+	socketPath := internals.GenerateUDSPath(tempPath)
+	ok, err := internals.Exists(socketPath)
+	if err != nil {
+		return err
+	}
+
+	if ok {
+		if !forceVar {
+			return errors.New("pipe already exists at this address")
+		}
+		err := os.Remove(socketPath)
+		if err != nil {
+			return err
+		}
+	}
+
+	socket, err := net.Listen("unix", socketPath)
+	if err != nil {
+		os.Remove(socketPath)
+		return err
+	}
+
+	sigIntCleanup(func() error { return os.Remove(socketPath) })
+
+	// create loggers
+	logFd, err := createLogFile()
+	if err != nil {
+		return err
+	}
+
+	// create repl
+	repl, err := createRepl(logFd, args)
+	if err != nil {
+		return err
+	}
+
+}
+
 func runNamedPipe(args []string) error {
 	// connect to pipe
 	tempPath, err := internals.GetPathCurDir()
@@ -59,47 +103,60 @@ func runNamedPipe(args []string) error {
 	defer pipe.CleanUp()
 
 	// handle process interruption
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGINT)
-	go func() {
-		<-c
-		fmt.Fprintln(os.Stderr, "\nProcess interrupted, proceeding to cleanup")
-		pipe.CleanUp()
-		os.Exit(1)
-	}()
+	sigIntCleanup(pipe.CleanUp)
 
 	// create loggers
-	logTime := time.Now().Format("2006-01-02T15:04:05")
-	logPath := os.ExpandEnv("$HOME/.cache/gorepl")
-	if ok, _ := internals.Exists(logPath); !ok {
-		err := os.MkdirAll(logPath, 0777)
-		if err != nil {
-			return err
-		}
-	}
-	logFd, err := os.Create(fmt.Sprintf(path.Join(logPath, "%s-logs"), logTime))
+	logFd, err := createLogFile()
 	if err != nil {
 		return err
 	}
-	cmd := strings.Join(args, " ")
 
 	// create repl
-	repl, err := internals.NewRepl(cmd)
+	repl, err := createRepl(logFd, args)
 	if err != nil {
 		return err
 	}
-	replLogger := internals.NewLogger(logFd, "Repl")
-	replErr := func(err error) { replLogger.Print("Error: ", err) }
-	repl.ErrHandler = replErr
-	repl.Logger = replLogger
 
 	// create echo stdin
 	syncOutput := internals.NewSyncWriter(os.Stdout)
 	pipeEcho := internals.NewReaderWithEcho(pipe, syncOutput)
 
 	// create multiplexer
-	mp := internals.NewMultiPlexer(pipeEcho, os.Stdin)
-	mpLogger := internals.NewLogger(logFd, "MultiPlexer")
+	mp := createMultiPlexer(logFd, pipeEcho, os.Stdin)
+
+	// listen for incoming data
+	go mp.Listen()
+	// start repl
+	if err := repl.Run(mp, syncOutput, os.Stderr); err != nil {
+		return err
+	}
+	// close pipes
+	mp.Close()
+
+	return nil
+}
+
+func createLogFile() (*os.File, error) {
+
+	logTime := time.Now().Format("2006-01-02T15:04:05")
+	logPath := os.ExpandEnv("$HOME/.cache/gorepl")
+	if ok, _ := internals.Exists(logPath); !ok {
+		err := os.MkdirAll(logPath, 0777)
+		if err != nil {
+			return nil, err
+		}
+	}
+	logFd, err := os.Create(fmt.Sprintf(path.Join(logPath, "%s-logs"), logTime))
+	if err != nil {
+		return nil, err
+	}
+
+	return logFd, nil
+}
+
+func createMultiPlexer(logFile *os.File, inputs ...io.ReadCloser) *internals.MultiPlexer {
+	mp := internals.NewMultiPlexer(inputs...)
+	mpLogger := internals.NewLogger(logFile, "MultiPlexer")
 	mpErr := func(err error) {
 		// check if any input has reached EOF
 		if errors.Is(err, io.EOF) {
@@ -124,14 +181,30 @@ func runNamedPipe(args []string) error {
 	mp.Logger = mpLogger
 	mp.ErrHandler = mpErr
 
-	// listen for incoming data
-	go mp.Listen()
-	// start repl
-	if err := repl.Run(mp, syncOutput, os.Stderr); err != nil {
-		return err
-	}
-	// close pipes
-	mp.Close()
+	return mp
+}
 
-	return nil
+func createRepl(logFile *os.File, args []string) (*internals.Repl, error) {
+	cmd := strings.Join(args, " ")
+	repl, err := internals.NewRepl(cmd)
+	if err != nil {
+		return nil, err
+	}
+	replLogger := internals.NewLogger(logFile, "Repl")
+	replErr := func(err error) { replLogger.Print("Error: ", err) }
+	repl.ErrHandler = replErr
+	repl.Logger = replLogger
+
+	return repl, nil
+}
+
+func sigIntCleanup(cleanup func() error) {
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGINT)
+	go func() {
+		<-c
+		fmt.Fprintln(os.Stderr, "\nProcess interrupted, proceeding to cleanup")
+		cleanup()
+		os.Exit(1)
+	}()
 }
