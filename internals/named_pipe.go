@@ -19,7 +19,12 @@ func GenerateNPipePath(tempPath string) string {
 	return strings.Join([]string{tempPath, NPipeName}, "_")
 }
 
-func MkTempFifo(tempPath string, force bool) (*TempNPipe, error) {
+func MkTempFifo(force bool) (*TempNPipe, error) {
+	tempPath, err := GetPathCurDir()
+	if err != nil {
+		return nil, err
+	}
+
 	// check if dir exists; if so, error unless forced
 	npipePath := GenerateNPipePath(tempPath)
 	if ok, _ := Exists(npipePath); ok {
@@ -31,7 +36,7 @@ func MkTempFifo(tempPath string, force bool) (*TempNPipe, error) {
 			return nil, err
 		}
 	}
-	err := unix.Mkfifo(npipePath, 0666)
+	err = unix.Mkfifo(npipePath, 0666)
 	if err != nil {
 		return nil, err
 	}

@@ -58,7 +58,7 @@ func runUDS(args []string) error {
 
 	if ok {
 		if !forceVar {
-			return errors.New("pipe already exists at this address")
+			return errors.New("socket already exists at this address")
 		}
 		err := os.Remove(socketPath)
 		if err != nil {
@@ -85,17 +85,11 @@ func runUDS(args []string) error {
 	if err != nil {
 		return err
 	}
-
 }
 
 func runNamedPipe(args []string) error {
 	// connect to pipe
-	tempPath, err := internals.GetPathCurDir()
-	if err != nil {
-		return err
-	}
-
-	pipe, err := internals.MkTempFifo(tempPath, forceVar)
+	pipe, err := internals.MkTempFifo(forceVar)
 	if err != nil {
 		return err
 	}
@@ -199,7 +193,7 @@ func createRepl(logFile *os.File, args []string) (*internals.Repl, error) {
 }
 
 func sigIntCleanup(cleanup func() error) {
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGINT)
 	go func() {
 		<-c
