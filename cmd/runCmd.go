@@ -24,19 +24,27 @@ var (
 	}
 )
 
+var connectionVar connectionFlag = "uds"
+
 func Run(command *cobra.Command, args []string) {
 	if len(args) == 0 {
 		command.Help()
 		os.Exit(0)
 	}
 
-	if namedPipeVar {
-		err := runNamedPipe(args)
+	switch connectionVar {
+	case "uds":
+		err := runUDS(args)
 		if err != nil {
 			cobra.CheckErr(err)
 		}
-	} else if udsVar {
-		err := runUDS(args)
+	case "tcp":
+		err := runTCP(args)
+		if err != nil {
+			cobra.CheckErr(err)
+		}
+	case "namedpipe":
+		err := runNamedPipe(args)
 		if err != nil {
 			cobra.CheckErr(err)
 		}
@@ -45,16 +53,23 @@ func Run(command *cobra.Command, args []string) {
 
 func init() {
 	rootCmd.AddCommand(runCmd)
-	runCmd.Flags().BoolVarP(&namedPipeVar, "named-pipe", "n", false, "Connect to a named pipe")
-	runCmd.Flags().BoolVarP(&udsVar, "uds", "u", true, "Connect to a unix domain socket")
+	runCmd.Flags().VarP(&connectionVar, "connection", "c", "type of connection.")
 	runCmd.Flags().StringVarP(&logPathVar, "log", "l", "", "path to logs; defaults to ~/.cache/gorepl")
 	runCmd.Flags().BoolVarP(&forceVar, "force", "f", false, "Force connection and start of repl")
+	runCmd.Flags().IntVarP(&port, "port", "p", 4501, "Port for TCP connection")
+}
+
+func runTCP(args []string) error {
+	return runSocket(internals.TCPSocket, "TCP", args)
 }
 
 func runUDS(args []string) error {
+	return runSocket(internals.UDSSocket, "UDS", args)
+}
 
-	fmt.Println("UDS launched")
-	socket, err := internals.NewSocket(internals.UDSSocket, forceVar)
+func runSocket(socketType internals.SocketType, loggerName string, args []string) error {
+
+	socket, err := internals.NewSocket(socketType, forceVar, port)
 	if err != nil {
 		return err
 	}
@@ -67,18 +82,16 @@ func runUDS(args []string) error {
 	if err != nil {
 		return err
 	}
-	socket.Logger = internals.NewLogger(logFd, "UDS")
-	// create echo stdin
-	syncOutput := internals.NewSyncWriter(os.Stdout)
-	socket.Echo = syncOutput
+	socket.Logger = internals.NewLogger(logFd, loggerName)
 
 	go socket.Listen()
 	// wait for the socket to be read
 	socket.IsReady()
 
-	go socket.ConnectReader(os.Stdin)
-	socket.Logger.Print("Stdin connected")
-	// pipeEcho := internals.NewReaderWithEcho(pipe, syncOutput)
+	syncOutput := internals.NewSyncWriter(os.Stdout)
+	socketWithEcho := internals.NewReaderWithEcho(socket, syncOutput)
+	mp := createMultiPlexer(logFd, socketWithEcho, os.Stdin)
+	go mp.Listen()
 
 	// create repl
 	repl, err := createRepl(logFd, args)
@@ -86,7 +99,7 @@ func runUDS(args []string) error {
 		return err
 	}
 	// start repl
-	if err := repl.Run(socket, syncOutput, os.Stderr); err != nil {
+	if err := repl.Run(mp, syncOutput, os.Stderr); err != nil {
 		return err
 	}
 	return nil
@@ -149,7 +162,7 @@ func createLogFile(logPath string) (*os.File, error) {
 			return nil, err
 		}
 	}
-	logPath = fmt.Sprintf(path.Join(logPath, "%s-logs"), logTime)
+	logPath = fmt.Sprintf(path.Join(logDir, "%s-logs"), logTime)
 	return os.Create(logPath)
 }
 
