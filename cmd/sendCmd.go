@@ -20,7 +20,7 @@ var (
 )
 
 func Send(command *cobra.Command, args []string) {
-	if namedPipeVar {
+	if namedPipeSendVar {
 		err := sendNamedPipe(command, args)
 		if err != nil {
 			cobra.CheckErr(err)
@@ -30,7 +30,7 @@ func Send(command *cobra.Command, args []string) {
 
 func init() {
 	rootCmd.AddCommand(sendCmd)
-	sendCmd.Flags().BoolVarP(&namedPipeVar, "named-pipe", "n", true, "Connect to a named pipe")
+	sendCmd.Flags().BoolVarP(&namedPipeSendVar, "named-pipe", "n", true, "Connect to a named pipe")
 }
 
 func sendNamedPipe(command *cobra.Command, args []string) error {

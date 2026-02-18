@@ -9,10 +9,13 @@ import (
 const Version = "v0.1.1"
 
 var (
-	namedPipeVar bool
-	forceVar     bool
-	jsonVar      bool
-	rootCmd      = &cobra.Command{
+	namedPipeVar     bool
+	namedPipeSendVar bool
+	logPathVar       string
+	udsVar           bool
+	forceVar         bool
+	jsonVar          bool
+	rootCmd          = &cobra.Command{
 		Use:     "gorepl",
 		Short:   "A repl multiplexer",
 		Long:    "gorepl allows you to spin up a repl and send lines to it from any terminal in the same directory",

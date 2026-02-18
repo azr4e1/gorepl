@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"net"
 	"os"
 	"os/signal"
 	"path"
@@ -36,55 +35,61 @@ func Run(command *cobra.Command, args []string) {
 		if err != nil {
 			cobra.CheckErr(err)
 		}
+	} else if udsVar {
+		err := runUDS(args)
+		if err != nil {
+			cobra.CheckErr(err)
+		}
 	}
 }
 
 func init() {
 	rootCmd.AddCommand(runCmd)
-	runCmd.Flags().BoolVarP(&namedPipeVar, "named-pipe", "n", true, "Connect to a named pipe")
+	runCmd.Flags().BoolVarP(&namedPipeVar, "named-pipe", "n", false, "Connect to a named pipe")
+	runCmd.Flags().BoolVarP(&udsVar, "uds", "u", true, "Connect to a unix domain socket")
+	runCmd.Flags().StringVarP(&logPathVar, "log", "l", "", "path to logs; defaults to ~/.cache/gorepl")
 	runCmd.Flags().BoolVarP(&forceVar, "force", "f", false, "Force connection and start of repl")
 }
 
 func runUDS(args []string) error {
-	tempPath, err := internals.GetPathCurDir()
+
+	fmt.Println("UDS launched")
+	socket, err := internals.NewSocket(internals.UDSSocket, forceVar)
 	if err != nil {
 		return err
 	}
-	socketPath := internals.GenerateUDSPath(tempPath)
-	ok, err := internals.Exists(socketPath)
-	if err != nil {
-		return err
-	}
+	defer socket.CleanUp()
 
-	if ok {
-		if !forceVar {
-			return errors.New("socket already exists at this address")
-		}
-		err := os.Remove(socketPath)
-		if err != nil {
-			return err
-		}
-	}
-
-	socket, err := net.Listen("unix", socketPath)
-	if err != nil {
-		os.Remove(socketPath)
-		return err
-	}
-
-	sigIntCleanup(func() error { return os.Remove(socketPath) })
+	sigIntCleanup(func() error { return socket.CleanUp() })
 
 	// create loggers
-	logFd, err := createLogFile()
+	logFd, err := createLogFile(logPathVar)
 	if err != nil {
 		return err
 	}
+	socket.Logger = internals.NewLogger(logFd, "UDS")
+	// create echo stdin
+	syncOutput := internals.NewSyncWriter(os.Stdout)
+	socket.Echo = syncOutput
+
+	go socket.Listen()
+	// wait for the socket to be read
+	socket.IsReady()
+
+	go socket.ConnectReader(os.Stdin)
+	socket.Logger.Print("Stdin connected")
+	// pipeEcho := internals.NewReaderWithEcho(pipe, syncOutput)
 
 	// create repl
 	repl, err := createRepl(logFd, args)
 	if err != nil {
 		return err
 	}
+	// start repl
+	if err := repl.Run(socket, syncOutput, os.Stderr); err != nil {
+		return err
+	}
+	return nil
 }
 
 func runNamedPipe(args []string) error {
@@ -100,7 +105,7 @@ func runNamedPipe(args []string) error {
 	sigIntCleanup(pipe.CleanUp)
 
 	// create loggers
-	logFd, err := createLogFile()
+	logFd, err := createLogFile(logPathVar)
 	if err != nil {
 		return err
 	}
@@ -130,22 +135,22 @@ func runNamedPipe(args []string) error {
 	return nil
 }
 
-func createLogFile() (*os.File, error) {
+func createLogFile(logPath string) (*os.File, error) {
+
+	if logPath != "" {
+		return os.Create(logPath)
+	}
 
 	logTime := time.Now().Format("2006-01-02T15:04:05")
-	logPath := os.ExpandEnv("$HOME/.cache/gorepl")
-	if ok, _ := internals.Exists(logPath); !ok {
-		err := os.MkdirAll(logPath, 0777)
+	logDir := os.ExpandEnv("$HOME/.cache/gorepl")
+	if ok, _ := internals.Exists(logDir); !ok {
+		err := os.MkdirAll(logDir, 0777)
 		if err != nil {
 			return nil, err
 		}
 	}
-	logFd, err := os.Create(fmt.Sprintf(path.Join(logPath, "%s-logs"), logTime))
-	if err != nil {
-		return nil, err
-	}
-
-	return logFd, nil
+	logPath = fmt.Sprintf(path.Join(logPath, "%s-logs"), logTime)
+	return os.Create(logPath)
 }
 
 func createMultiPlexer(logFile *os.File, inputs ...io.ReadCloser) *internals.MultiPlexer {
