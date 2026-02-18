@@ -38,24 +38,10 @@ func GenerateUDSPath(tempPath string) string {
 func NewSocket(socketType SocketType, forceVar bool, port int) (*Socket, error) {
 	var address string
 	if socketType == UDSSocket {
-		tempPath, err := GetPathCurDir()
+		var err error
+		address, err = newUDSAddress(forceVar)
 		if err != nil {
 			return nil, err
-		}
-		address = GenerateUDSPath(tempPath)
-		ok, err := Exists(address)
-		if err != nil {
-			return nil, err
-		}
-
-		if ok {
-			if !forceVar {
-				return nil, errors.New("socket already exists at this address")
-			}
-			err := os.Remove(address)
-			if err != nil {
-				return nil, err
-			}
 		}
 	} else {
 		address = fmt.Sprintf("localhost:%d", port)
@@ -71,6 +57,29 @@ func NewSocket(socketType SocketType, forceVar bool, port int) (*Socket, error) 
 	}
 
 	return newSocket, nil
+}
+
+func newUDSAddress(forceVar bool) (string, error) {
+	tempPath, err := GetPathCurDir()
+	if err != nil {
+		return "", err
+	}
+	address := GenerateUDSPath(tempPath)
+	ok, err := Exists(address)
+	if err != nil {
+		return "", err
+	}
+
+	if ok {
+		if !forceVar {
+			return "", errors.New("socket already exists at this address")
+		}
+		err := os.Remove(address)
+		if err != nil {
+			return "", err
+		}
+	}
+	return address, nil
 }
 
 func (s *Socket) ConnectReader(reader io.Reader) error {

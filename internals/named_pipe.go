@@ -54,16 +54,21 @@ func MkTempFifo(force bool) (*TempNPipe, error) {
 
 func NewTempFifo(tempPath string) (*TempNPipe, error) {
 	npipePath := GenerateNPipePath(tempPath)
-	fd, err := os.OpenFile(npipePath, os.O_RDWR, 0)
+	return NewFifo(npipePath)
+}
+
+func NewFifo(address string) (*TempNPipe, error) {
+	if ok, _ := Exists(address); !ok {
+		return nil, errors.New("pipe doesn't exist at this address")
+	}
+	fd, err := os.OpenFile(address, os.O_RDWR, 0)
 	if err != nil {
 		return nil, err
 	}
-
 	return &TempNPipe{
-		Address: npipePath,
+		Address: address,
 		fd:      fd,
 	}, nil
-
 }
 
 func (tnp *TempNPipe) Read(p []byte) (int, error) {

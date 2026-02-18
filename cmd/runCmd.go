@@ -78,7 +78,7 @@ func runSocket(socketType internals.SocketType, loggerName string, args []string
 	socket.Logger = internals.NewLogger(logFd, loggerName)
 
 	go socket.Listen()
-	// wait for the socket to be read
+	// wait for the socket to be ready
 	socket.IsReady()
 
 	syncOutput := internals.NewSyncWriter(os.Stdout)
