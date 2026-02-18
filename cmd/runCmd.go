@@ -24,39 +24,32 @@ var (
 	}
 )
 
-var connectionVar connectionFlag = "uds"
-
 func Run(command *cobra.Command, args []string) {
 	if len(args) == 0 {
 		command.Help()
 		os.Exit(0)
 	}
 
+	var err error
 	switch connectionVar {
 	case "uds":
-		err := runUDS(args)
-		if err != nil {
-			cobra.CheckErr(err)
-		}
+		err = runUDS(args)
 	case "tcp":
-		err := runTCP(args)
-		if err != nil {
-			cobra.CheckErr(err)
-		}
+		err = runTCP(args)
 	case "namedpipe":
-		err := runNamedPipe(args)
-		if err != nil {
-			cobra.CheckErr(err)
-		}
+		err = runNamedPipe(args)
+	}
+	if err != nil {
+		cobra.CheckErr(err)
 	}
 }
 
 func init() {
 	rootCmd.AddCommand(runCmd)
-	runCmd.Flags().VarP(&connectionVar, "connection", "c", "type of connection.")
-	runCmd.Flags().StringVarP(&logPathVar, "log", "l", "", "path to logs; defaults to ~/.cache/gorepl")
-	runCmd.Flags().BoolVarP(&forceVar, "force", "f", false, "Force connection and start of repl")
-	runCmd.Flags().IntVarP(&port, "port", "p", 4501, "Port for TCP connection")
+	runCmd.Flags().VarP(&connectionVar, "connection", "c", "type of connection")
+	runCmd.Flags().StringVarP(&logPathVar, "log", "l", "", "path to logs (default ~/.cache/gorepl)")
+	runCmd.Flags().BoolVarP(&forceVar, "force", "f", false, "force connection and start of repl")
+	runCmd.Flags().IntVarP(&port, "port", "p", 4501, "port for TCP connection")
 }
 
 func runTCP(args []string) error {
@@ -91,6 +84,7 @@ func runSocket(socketType internals.SocketType, loggerName string, args []string
 	syncOutput := internals.NewSyncWriter(os.Stdout)
 	socketWithEcho := internals.NewReaderWithEcho(socket, syncOutput)
 	mp := createMultiPlexer(logFd, socketWithEcho, os.Stdin)
+	defer mp.Close()
 	go mp.Listen()
 
 	// create repl

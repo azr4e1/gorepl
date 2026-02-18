@@ -26,12 +26,14 @@ func (c *connectionFlag) Set(v string) error {
 }
 
 var (
-	namedPipeSendVar bool
-	logPathVar       string
-	port             int
-	forceVar         bool
-	jsonVar          bool
-	rootCmd          = &cobra.Command{
+	namedPipeSendVar  bool
+	logPathVar        string
+	port              int
+	forceVar          bool
+	jsonVar           bool
+	connectionVar     connectionFlag = "uds"
+	connectionVarSend connectionFlag = "uds"
+	rootCmd                          = &cobra.Command{
 		Use:     "gorepl",
 		Short:   "A repl multiplexer",
 		Long:    "gorepl allows you to spin up a repl and send lines to it from any terminal in the same directory",

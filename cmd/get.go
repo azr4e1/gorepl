@@ -44,7 +44,7 @@ func Get(command *cobra.Command, args []string) {
 
 func init() {
 	rootCmd.AddCommand(getCmd)
-	getCmd.Flags().BoolVarP(&jsonVar, "json", "j", false, "Show output in JSON format")
+	getCmd.Flags().BoolVarP(&jsonVar, "json", "j", false, "show output in JSON format")
 }
 
 func getNamedPipe() ([]Connection, error) {
