@@ -111,6 +111,10 @@ func (s *Socket) Listen() error {
 		// Accept incoming connection
 		conn, err := s.listener.Accept()
 		if err != nil {
+			// stop if listener is closed
+			if errors.Is(err, net.ErrClosed) {
+				return nil
+			}
 			s.Logger.Printf("err: couldn't accept connection, %s", err)
 			continue
 		}
