@@ -31,6 +31,7 @@ var (
 	portVarSend       int
 	forceVar          bool
 	addressVarSend    string
+	allConnections    bool
 	jsonVar           bool
 	connectionVar     connectionFlag = "uds"
 	connectionVarSend connectionFlag = "uds"
