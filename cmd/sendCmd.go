@@ -27,11 +27,11 @@ func Send(command *cobra.Command, args []string) {
 	var err error
 	switch connectionVarSend {
 	case "namedpipe":
-		err = sendNamedPipe(command, args)
+		err = sendNamedPipe(command, args, addressVarSend)
 	case "uds":
-		err = sendUDS(command, args)
+		err = sendUDS(command, args, addressVarSend)
 	case "tcp":
-		err = sendTCP(command, args)
+		err = sendTCP(command, args, portVarSend)
 	}
 	if err != nil {
 		cobra.CheckErr(err)
@@ -45,7 +45,7 @@ func init() {
 	sendCmd.Flags().StringVarP(&addressVarSend, "address", "a", "", "address for namedpipe or UDS connection")
 }
 
-func sendTCP(command *cobra.Command, args []string) error {
+func sendTCP(command *cobra.Command, args []string, portVarSend int) error {
 	socketType := internals.TCPSocket
 	var address string
 	var err error
@@ -61,7 +61,7 @@ func sendTCP(command *cobra.Command, args []string) error {
 	return sendSocket(command, args, socketType, address)
 }
 
-func sendUDS(command *cobra.Command, args []string) error {
+func sendUDS(command *cobra.Command, args []string, addressVarSend string) error {
 	socketType := internals.UDSSocket
 	var address string
 	var err error
@@ -96,7 +96,7 @@ func sendSocket(command *cobra.Command, args []string, socketType internals.Sock
 	return err
 }
 
-func sendNamedPipe(command *cobra.Command, args []string) error {
+func sendNamedPipe(command *cobra.Command, args []string, addressVarSend string) error {
 	// get connection
 	var nPipe *internals.TempNPipe
 	var err error

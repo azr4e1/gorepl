@@ -33,11 +33,11 @@ func Run(command *cobra.Command, args []string) {
 	var err error
 	switch connectionVar {
 	case "uds":
-		err = runUDS(args)
+		err = runUDS(args, forceVar, portVar, logPathVar)
 	case "tcp":
-		err = runTCP(args)
+		err = runTCP(args, forceVar, portVar, logPathVar)
 	case "namedpipe":
-		err = runNamedPipe(args)
+		err = runNamedPipe(args, forceVar, logPathVar)
 	}
 	if err != nil {
 		cobra.CheckErr(err)
@@ -52,15 +52,15 @@ func init() {
 	runCmd.Flags().IntVarP(&portVar, "port", "p", 4501, "port for TCP connection")
 }
 
-func runTCP(args []string) error {
-	return runSocket(internals.TCPSocket, "TCP", args)
+func runTCP(args []string, forceVar bool, portVar int, logPathVar string) error {
+	return runSocket(internals.TCPSocket, "TCP", args, forceVar, portVar, logPathVar)
 }
 
-func runUDS(args []string) error {
-	return runSocket(internals.UDSSocket, "UDS", args)
+func runUDS(args []string, forceVar bool, portVar int, logPathVar string) error {
+	return runSocket(internals.UDSSocket, "UDS", args, forceVar, portVar, logPathVar)
 }
 
-func runSocket(socketType internals.SocketType, loggerName string, args []string) error {
+func runSocket(socketType internals.SocketType, loggerName string, args []string, forceVar bool, portVar int, logPathVar string) error {
 
 	socket, err := internals.NewSocket(socketType, forceVar, portVar)
 	if err != nil {
@@ -99,7 +99,7 @@ func runSocket(socketType internals.SocketType, loggerName string, args []string
 	return nil
 }
 
-func runNamedPipe(args []string) error {
+func runNamedPipe(args []string, forceVar bool, logPathVar string) error {
 	// connect to pipe
 	pipe, err := internals.MkTempFifo(forceVar)
 	if err != nil {
