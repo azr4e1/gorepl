@@ -26,7 +26,6 @@ func (c *connectionFlag) Set(v string) error {
 }
 
 var (
-	namedPipeSendVar  bool
 	logPathVar        string
 	portVar           int
 	portVarSend       int

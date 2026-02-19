@@ -15,18 +15,20 @@ type TempNPipe struct {
 	fd      *os.File
 }
 
-func GenerateNPipePath(tempPath string) string {
-	return strings.Join([]string{tempPath, NPipeName}, "_")
+func GenerateNPipePath() (string, error) {
+	tempPath, err := GetPathCurDir()
+	if err != nil {
+		return "", err
+	}
+	return strings.Join([]string{tempPath, NPipeName}, "_"), nil
 }
 
 func MkTempFifo(force bool) (*TempNPipe, error) {
-	tempPath, err := GetPathCurDir()
+	// check if dir exists; if so, error unless forced
+	npipePath, err := GenerateNPipePath()
 	if err != nil {
 		return nil, err
 	}
-
-	// check if dir exists; if so, error unless forced
-	npipePath := GenerateNPipePath(tempPath)
 	if ok, _ := Exists(npipePath); ok {
 		if !force {
 			return nil, errors.New("pipe already exists at this address")
@@ -53,7 +55,10 @@ func MkTempFifo(force bool) (*TempNPipe, error) {
 }
 
 func NewTempFifo(tempPath string) (*TempNPipe, error) {
-	npipePath := GenerateNPipePath(tempPath)
+	npipePath, err := GenerateNPipePath()
+	if err != nil {
+		return nil, err
+	}
 	return NewFifo(npipePath)
 }
 

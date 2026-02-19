@@ -168,21 +168,21 @@ func createMultiPlexer(logFile *os.File, inputs ...io.ReadCloser) *internals.Mul
 		if errors.Is(err, io.EOF) {
 			err = mp.Close()
 			if err != nil {
-				mpLogger.Print("Error: ", err)
+				mpLogger.Print("error: ", err)
 			}
 			return
 		}
 		// check if pipe was closed
 		var pipeError *fs.PathError
 		if errors.As(err, &pipeError) {
-			mpLogger.Print("Error: ", err)
+			mpLogger.Print("error: ", err)
 			err = mp.Close()
 			if err != nil {
-				mpLogger.Print("Error: ", err)
+				mpLogger.Print("error: ", err)
 			}
 			return
 		}
-		mpLogger.Print("Error: ", err)
+		mpLogger.Print("error: ", err)
 	}
 	mp.Logger = mpLogger
 	mp.ErrHandler = mpErr
@@ -197,7 +197,7 @@ func createRepl(logFile *os.File, args []string) (*internals.Repl, error) {
 		return nil, err
 	}
 	replLogger := internals.NewLogger(logFile, "Repl")
-	replErr := func(err error) { replLogger.Print("Error: ", err) }
+	replErr := func(err error) { replLogger.Print("error: ", err) }
 	repl.ErrHandler = replErr
 	repl.Logger = replLogger
 
@@ -209,7 +209,7 @@ func sigIntCleanup(cleanup func() error) {
 	signal.Notify(c, os.Interrupt, syscall.SIGINT)
 	go func() {
 		<-c
-		fmt.Fprintln(os.Stderr, "\nProcess interrupted, proceeding to cleanup")
+		fmt.Fprintln(os.Stderr, "\nprocess interrupted, proceeding to cleanup")
 		cleanup()
 		os.Exit(1)
 	}()
