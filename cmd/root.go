@@ -28,7 +28,8 @@ func (c *connectionFlag) Set(v string) error {
 var (
 	namedPipeSendVar  bool
 	logPathVar        string
-	port              int
+	portVar           int
+	portVarSend       int
 	forceVar          bool
 	jsonVar           bool
 	connectionVar     connectionFlag = "uds"

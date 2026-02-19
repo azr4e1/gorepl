@@ -4,12 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"strings"
 
 	"github.com/azr4e1/gorepl/internals"
 	"github.com/spf13/cobra"
 )
+
+var zeroArgsError = errors.New("no arguments provided")
 
 var (
 	sendCmd = &cobra.Command{
@@ -20,17 +23,61 @@ var (
 )
 
 func Send(command *cobra.Command, args []string) {
-	if namedPipeSendVar {
-		err := sendNamedPipe(command, args)
-		if err != nil {
-			cobra.CheckErr(err)
-		}
+	var err error
+	switch connectionVarSend {
+	case "namedpipe":
+		err = sendNamedPipe(command, args)
+	case "uds":
+		err = sendUDS(command, args)
+	case "tcp":
+		err = sendTCP(command, args)
+	}
+	if err != nil {
+		cobra.CheckErr(err)
 	}
 }
 
 func init() {
 	rootCmd.AddCommand(sendCmd)
-	sendCmd.Flags().BoolVarP(&namedPipeSendVar, "named-pipe", "n", true, "connect to a named pipe")
+	sendCmd.Flags().VarP(&connectionVarSend, "connection", "c", "type of connection")
+	sendCmd.Flags().IntVarP(&portVarSend, "port", "p", 4501, "port for TCP connection")
+}
+
+func sendTCP(command *cobra.Command, args []string) error {
+	socketType := internals.TCPSocket
+	address := fmt.Sprintf("localhost:%d", portVarSend)
+
+	return sendSocket(command, args, socketType, address)
+}
+
+func sendUDS(command *cobra.Command, args []string) error {
+	socketType := internals.UDSSocket
+	tempPath, err := internals.GetPathCurDir()
+	if err != nil {
+		return err
+	}
+	address := internals.GenerateUDSPath(tempPath)
+
+	return sendSocket(command, args, socketType, address)
+}
+
+func sendSocket(command *cobra.Command, args []string, socketType internals.SocketType, address string) error {
+	conn, err := net.Dial(string(socketType), address)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	lines, err := getContent(args)
+	if err != nil {
+		if errors.Is(err, zeroArgsError) {
+			command.Help()
+			return nil
+		}
+		return err
+	}
+	_, err = conn.Write(preprocess(lines))
+	return err
 }
 
 func sendNamedPipe(command *cobra.Command, args []string) error {
@@ -46,26 +93,39 @@ func sendNamedPipe(command *cobra.Command, args []string) error {
 	defer nPipe.Close()
 
 	// determine if we are getting piped
-	fi, err := os.Stdin.Stat()
+	lines, err := getContent(args)
 	if err != nil {
-		return err
-	}
-
-	var lines []byte
-	if (fi.Mode() & os.ModeCharDevice) == 0 {
-		lines, err = io.ReadAll(os.Stdin)
-		if err != nil {
-			return err
-		}
-	} else {
-		if len(args) == 0 {
+		if errors.Is(err, zeroArgsError) {
 			command.Help()
-			os.Exit(0)
+			return nil
 		}
-		lines = fmt.Appendln(nil, strings.Join(args, " "))
+		return err
 	}
 	_, err = nPipe.Write(preprocess(lines))
 	return err
+}
+
+func getContent(args []string) ([]byte, error) {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	var lines []byte
+	// we are getting piped
+	if (fi.Mode() & os.ModeCharDevice) == 0 {
+		lines, err = io.ReadAll(os.Stdin)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if len(args) == 0 {
+			return nil, zeroArgsError
+		}
+		lines = fmt.Appendln(nil, strings.Join(args, " "))
+	}
+
+	return lines, nil
 }
 
 func preprocess(buf []byte) []byte {

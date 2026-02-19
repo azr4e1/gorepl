@@ -49,7 +49,7 @@ func init() {
 	runCmd.Flags().VarP(&connectionVar, "connection", "c", "type of connection")
 	runCmd.Flags().StringVarP(&logPathVar, "log", "l", "", "path to logs (default ~/.cache/gorepl)")
 	runCmd.Flags().BoolVarP(&forceVar, "force", "f", false, "force connection and start of repl")
-	runCmd.Flags().IntVarP(&port, "port", "p", 4501, "port for TCP connection")
+	runCmd.Flags().IntVarP(&portVar, "port", "p", 4501, "port for TCP connection")
 }
 
 func runTCP(args []string) error {
@@ -62,7 +62,7 @@ func runUDS(args []string) error {
 
 func runSocket(socketType internals.SocketType, loggerName string, args []string) error {
 
-	socket, err := internals.NewSocket(socketType, forceVar, port)
+	socket, err := internals.NewSocket(socketType, forceVar, portVar)
 	if err != nil {
 		return err
 	}
