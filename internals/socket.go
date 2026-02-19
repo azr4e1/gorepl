@@ -3,11 +3,11 @@ package internals
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -19,6 +19,8 @@ const (
 )
 
 const UDSName = "unix_socket"
+const TCPName = "tcp_socket"
+const TCPHost = "localhost"
 
 type Socket struct {
 	socketType SocketType
@@ -31,20 +33,55 @@ type Socket struct {
 	ready chan bool
 }
 
-func GenerateUDSPath(tempPath string) string {
-	return strings.Join([]string{tempPath, UDSName}, "_")
+// Returns the path string where the socket is stored
+func GenerateUDSPath() (string, error) {
+	tempPath, err := GetPathCurDir()
+	if err != nil {
+		return "", err
+	}
+	return strings.Join([]string{tempPath, UDSName}, "_"), nil
+}
+
+// Returns the path string where the a text file
+// containing the active address of the TCP socket is stored
+func GenerateTCPPath() (string, error) {
+	tempPath, err := GetPathCurDir()
+	if err != nil {
+		return "", err
+	}
+	return strings.Join([]string{tempPath, TCPName}, "_"), nil
+}
+
+func RetrieveTCPAddress() (string, error) {
+	addressTrace, err := GenerateTCPPath()
+	if err != nil {
+		return "", err
+	}
+	if ok, _ := Exists(addressTrace); !ok {
+		return "", errors.New("couldn't find TCP address")
+	}
+	fd, err := os.Open(addressTrace)
+	if err != nil {
+		return "", err
+	}
+	address, err := io.ReadAll(fd)
+	if err != nil {
+		return "", err
+	}
+
+	return string(address), nil
 }
 
 func NewSocket(socketType SocketType, forceVar bool, port int) (*Socket, error) {
 	var address string
+	var err error
 	if socketType == UDSSocket {
-		var err error
 		address, err = newUDSAddress(forceVar)
-		if err != nil {
-			return nil, err
-		}
 	} else {
-		address = fmt.Sprintf("localhost:%d", port)
+		address, err = newTCPAddress(port, forceVar)
+	}
+	if err != nil {
+		return nil, err
 	}
 	pipeReader, pipeWriter := io.Pipe()
 	newSocket := &Socket{
@@ -59,12 +96,38 @@ func NewSocket(socketType SocketType, forceVar bool, port int) (*Socket, error) 
 	return newSocket, nil
 }
 
-func newUDSAddress(forceVar bool) (string, error) {
-	tempPath, err := GetPathCurDir()
+func newTCPAddress(port int, forceVar bool) (string, error) {
+	address := net.JoinHostPort(TCPHost, strconv.Itoa(port))
+	addressTrace, err := GenerateTCPPath()
 	if err != nil {
 		return "", err
 	}
-	address := GenerateUDSPath(tempPath)
+	ok, err := Exists(addressTrace)
+	if err != nil {
+		return "", err
+	}
+
+	if ok {
+		if !forceVar {
+			return "", errors.New("socket already exists at this address")
+		}
+	}
+	fd, err := os.Create(addressTrace)
+	if err != nil {
+		return "", err
+	}
+	_, err = fd.WriteString(address)
+	if err != nil {
+		return "", err
+	}
+	return address, nil
+}
+
+func newUDSAddress(forceVar bool) (string, error) {
+	address, err := GenerateUDSPath()
+	if err != nil {
+		return "", err
+	}
 	ok, err := Exists(address)
 	if err != nil {
 		return "", err
@@ -94,13 +157,13 @@ func (s *Socket) ConnectReader(reader io.Reader) error {
 		line := scanner.Text()
 		_, err := conn.Write([]byte(line + "\n"))
 		if err != nil {
-			s.Logger.Printf("err: %s", err)
+			s.Logger.Printf("error: %s", err)
 		}
 	}
 
 	// close the pipeWriter to signal that input is closed
 	if err := scanner.Err(); err != nil {
-		s.Logger.Printf("err: %s", err)
+		s.Logger.Printf("error: %s", err)
 	}
 	s.Logger.Printf("closing input")
 	return s.pipeWriter.Close()
@@ -124,7 +187,7 @@ func (s *Socket) Listen() error {
 			if errors.Is(err, net.ErrClosed) {
 				return nil
 			}
-			s.Logger.Printf("err: couldn't accept connection, %s", err)
+			s.Logger.Printf("error: couldn't accept connection, %s", err)
 			continue
 		}
 		s.Logger.Print("New connection accepted")
@@ -143,7 +206,7 @@ func (s *Socket) readFromConnection(conn net.Conn) {
 	for {
 		n, err := conn.Read(buf)
 		if err != nil {
-			s.Logger.Printf("err: couldn't read data, %s", err)
+			s.Logger.Printf("error: couldn't read data, %s", err)
 			return
 		}
 
@@ -152,7 +215,7 @@ func (s *Socket) readFromConnection(conn net.Conn) {
 
 			_, err = s.pipeWriter.Write(buf[:n])
 			if err != nil {
-				s.Logger.Printf("err: couldn't write data, %s", err)
+				s.Logger.Printf("error: couldn't write data, %s", err)
 				return
 			}
 			s.Logger.Print("written to output")
@@ -172,7 +235,7 @@ func (s *Socket) Close() error {
 	if s.listener != nil {
 		err := s.listener.Close()
 		if err != nil {
-			s.Logger.Printf("err closing the listener: %s", err)
+			s.Logger.Printf("error closing the listener: %s", err)
 		}
 	}
 	return s.pipeWriter.Close()
@@ -181,11 +244,17 @@ func (s *Socket) Close() error {
 func (s *Socket) CleanUp() error {
 	err := s.Close()
 	if err != nil {
-		s.Logger.Printf("err closing the socket: %s", err)
+		s.Logger.Printf("error closing the socket: %s", err)
 	}
 	err = nil
 	if s.socketType == UDSSocket {
 		err = os.Remove(s.address)
+	} else {
+		addressTrace, err := GenerateTCPPath()
+		if err != nil {
+			return err
+		}
+		err = os.Remove(addressTrace)
 	}
 	return err
 }

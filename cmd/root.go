@@ -30,6 +30,7 @@ var (
 	portVar           int
 	portVarSend       int
 	forceVar          bool
+	addressVarSend    string
 	jsonVar           bool
 	connectionVar     connectionFlag = "uds"
 	connectionVarSend connectionFlag = "uds"

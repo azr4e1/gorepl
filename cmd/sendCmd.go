@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/azr4e1/gorepl/internals"
@@ -40,23 +41,38 @@ func Send(command *cobra.Command, args []string) {
 func init() {
 	rootCmd.AddCommand(sendCmd)
 	sendCmd.Flags().VarP(&connectionVarSend, "connection", "c", "type of connection")
-	sendCmd.Flags().IntVarP(&portVarSend, "port", "p", 4501, "port for TCP connection")
+	sendCmd.Flags().IntVarP(&portVarSend, "port", "p", -1, "port for TCP connection")
+	sendCmd.Flags().StringVarP(&addressVarSend, "address", "a", "", "address for namedpipe or UDS connection")
 }
 
 func sendTCP(command *cobra.Command, args []string) error {
 	socketType := internals.TCPSocket
-	address := fmt.Sprintf("localhost:%d", portVarSend)
+	var address string
+	var err error
+	if portVarSend >= 0 {
+		address = net.JoinHostPort(internals.TCPHost, strconv.Itoa(portVarSend))
+	} else {
+		address, err = internals.RetrieveTCPAddress()
+	}
+	if err != nil {
+		return err
+	}
 
 	return sendSocket(command, args, socketType, address)
 }
 
 func sendUDS(command *cobra.Command, args []string) error {
 	socketType := internals.UDSSocket
-	tempPath, err := internals.GetPathCurDir()
+	var address string
+	var err error
+	if addressVarSend != "" {
+		address = addressVarSend
+	} else {
+		address, err = internals.GenerateUDSPath()
+	}
 	if err != nil {
 		return err
 	}
-	address := internals.GenerateUDSPath(tempPath)
 
 	return sendSocket(command, args, socketType, address)
 }
@@ -64,7 +80,7 @@ func sendUDS(command *cobra.Command, args []string) error {
 func sendSocket(command *cobra.Command, args []string, socketType internals.SocketType, address string) error {
 	conn, err := net.Dial(string(socketType), address)
 	if err != nil {
-		return err
+		return fmt.Errorf("Couldn't connect to a %s socket. Are you sure your repl is running at this address?", socketType)
 	}
 	defer conn.Close()
 
@@ -82,13 +98,15 @@ func sendSocket(command *cobra.Command, args []string, socketType internals.Sock
 
 func sendNamedPipe(command *cobra.Command, args []string) error {
 	// get connection
-	tempPath, err := internals.GetPathCurDir()
-	if err != nil {
-		return err
+	var nPipe *internals.TempNPipe
+	var err error
+	if addressVarSend != "" {
+		nPipe, err = internals.NewFifo(addressVarSend)
+	} else {
+		nPipe, err = internals.NewTempFifo()
 	}
-	nPipe, err := internals.NewTempFifo(tempPath)
 	if err != nil {
-		return errors.New("Couldn't connect to a named pipe. Are you sure your repl is running in this directory?")
+		return errors.New("Couldn't connect to a named pipe. Are you sure your repl is running at this address?")
 	}
 	defer nPipe.Close()
 

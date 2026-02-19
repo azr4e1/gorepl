@@ -54,7 +54,7 @@ func MkTempFifo(force bool) (*TempNPipe, error) {
 	}, nil
 }
 
-func NewTempFifo(tempPath string) (*TempNPipe, error) {
+func NewTempFifo() (*TempNPipe, error) {
 	npipePath, err := GenerateNPipePath()
 	if err != nil {
 		return nil, err
