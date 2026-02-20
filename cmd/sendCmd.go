@@ -42,42 +42,13 @@ func init() {
 	rootCmd.AddCommand(sendCmd)
 	sendCmd.Flags().VarP(&connectionVarSend, "connection", "c", "type of connection")
 	// add completion for connection
-	sendCmd.RegisterFlagCompletionFunc("connection", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"tcp", "uds", "namedpipe"}, cobra.ShellCompDirectiveNoFileComp
-	})
+	sendCmd.RegisterFlagCompletionFunc("connection", connectionCompletion)
 	sendCmd.Flags().IntVarP(&portVarSend, "port", "p", -1, "port for TCP connection")
-	// completion for port
-	sendCmd.RegisterFlagCompletionFunc("port", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		ports := []string{}
-		allTCPconns, err := getAllConnections("tcp")
-		if err != nil {
-			return ports, cobra.ShellCompDirectiveNoFileComp
-		}
-		for _, c := range allTCPconns {
-			_, port, err := net.SplitHostPort(c.Address)
-			if err != nil {
-				continue
-			}
-			ports = append(ports, port)
-		}
-		return ports, cobra.ShellCompDirectiveNoFileComp
-	})
+	// add completion for port
+	sendCmd.RegisterFlagCompletionFunc("port", portCompletion)
 	sendCmd.Flags().StringVarP(&addressVarSend, "address", "a", "", "address for namedpipe or UDS connection")
 	// completion for address
-	sendCmd.RegisterFlagCompletionFunc("address", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		addresses := []string{}
-		if connectionVarSend.String() == "tcp" {
-			return addresses, cobra.ShellCompDirectiveNoFileComp
-		}
-		allConnections, err := getAllConnections(connectionVarSend.String())
-		if err != nil {
-			return addresses, cobra.ShellCompDirectiveNoFileComp
-		}
-		for _, c := range allConnections {
-			addresses = append(addresses, c.Address)
-		}
-		return addresses, cobra.ShellCompDirectiveNoFileComp
-	})
+	sendCmd.RegisterFlagCompletionFunc("address", addressCompletion)
 }
 
 func sendTCP(command *cobra.Command, args []string, portVarSend int) error {

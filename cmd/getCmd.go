@@ -35,19 +35,27 @@ const (
 )
 
 func Get(command *cobra.Command, args []string) {
+	output, err := getConnections()
+	if err != nil {
+		cobra.CheckErr(err)
+	}
+	fmt.Fprintln(os.Stdout, output)
+}
+
+func getConnections() (string, error) {
 	connections := []Connection{}
 	if allConnections {
 		namedPipeConns, err := getAllConnections("namedpipe")
 		if err != nil {
-			cobra.CheckErr(err)
+			return "", err
 		}
 		tcpConns, err := getAllConnections("tcp")
 		if err != nil {
-			cobra.CheckErr(err)
+			return "", err
 		}
 		udsConns, err := getAllConnections("uds")
 		if err != nil {
-			cobra.CheckErr(err)
+			return "", err
 		}
 
 		connections = append(connections, namedPipeConns...)
@@ -56,15 +64,15 @@ func Get(command *cobra.Command, args []string) {
 	} else {
 		namedPipeConns, err := getCurConnections("namedpipe")
 		if err != nil {
-			cobra.CheckErr(err)
+			return "", err
 		}
 		tcpConns, err := getCurConnections("tcp")
 		if err != nil {
-			cobra.CheckErr(err)
+			return "", err
 		}
 		udsConns, err := getCurConnections("uds")
 		if err != nil {
-			cobra.CheckErr(err)
+			return "", err
 		}
 
 		connections = append(connections, namedPipeConns...)
@@ -75,13 +83,12 @@ func Get(command *cobra.Command, args []string) {
 	if jsonVar {
 		jsonFormat, err := marshallConnectionsJSON(connections)
 		if err != nil {
-			cobra.CheckErr(err)
+			return "", err
 		}
-		fmt.Fprint(os.Stdout, jsonFormat)
-		return
+		return jsonFormat, nil
 	}
 	textFormat := formatConnections(connections)
-	fmt.Fprint(os.Stdout, textFormat)
+	return textFormat, nil
 }
 
 func init() {
@@ -182,10 +189,10 @@ func getCurConnections(connType string) ([]Connection, error) {
 
 func formatConnections(conns []Connection) string {
 	if len(conns) == 0 {
-		return "There are no active connections\n"
+		return "There are no active connections"
 	}
 	format := func(conn Connection) string {
-		return fmt.Sprintf("Connection:\n  Type:    %s\n  Address: %s\n", conn.Type, conn.Address)
+		return fmt.Sprintf("Connection:\n  Type:    %s\n  Address: %s", conn.Type, conn.Address)
 	}
 
 	connStr := []string{}
@@ -195,13 +202,13 @@ func formatConnections(conns []Connection) string {
 		verb = "are"
 		name = "connections"
 	}
-	header := fmt.Sprintf("There %s %d active %s\n", verb, len(conns), name)
+	header := fmt.Sprintf("There %s %d active %s", verb, len(conns), name)
 	connStr = append(connStr, header)
 	for _, conn := range conns {
 		connStr = append(connStr, format(conn))
 	}
 
-	return strings.Join(connStr, "\n")
+	return strings.Join(connStr, "\n\n")
 }
 
 func marshallConnectionsJSON(conns []Connection) (string, error) {
@@ -209,5 +216,5 @@ func marshallConnectionsJSON(conns []Connection) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(res) + "\n", nil
+	return string(res), nil
 }

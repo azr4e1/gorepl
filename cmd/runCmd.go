@@ -48,9 +48,7 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 	runCmd.Flags().VarP(&connectionVar, "connection", "c", "type of connection")
 	// completion for connection
-	runCmd.RegisterFlagCompletionFunc("connection", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"tcp", "uds", "namedpipe"}, cobra.ShellCompDirectiveNoFileComp
-	})
+	runCmd.RegisterFlagCompletionFunc("connection", connectionCompletion)
 	runCmd.Flags().StringVarP(&logPathVar, "log", "l", "", "path to logs (default ~/.cache/gorepl)")
 	runCmd.Flags().BoolVarP(&forceVar, "force", "f", false, "force connection and start of repl")
 	runCmd.Flags().IntVarP(&portVar, "port", "p", 4501, "port for TCP connection")

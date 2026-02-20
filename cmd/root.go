@@ -2,13 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
-const Version = "v0.3.0"
+const Version = "v0.3.1"
 
 type connectionFlag string
 
@@ -42,6 +43,43 @@ var (
 		Version: Version,
 	}
 )
+
+// completion for connection
+func connectionCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return []string{"tcp", "uds", "namedpipe"}, cobra.ShellCompDirectiveNoFileComp
+}
+
+// completion for port
+func portCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	ports := []string{}
+	allTCPconns, err := getAllConnections("tcp")
+	if err != nil {
+		return ports, cobra.ShellCompDirectiveNoFileComp
+	}
+	for _, c := range allTCPconns {
+		_, port, err := net.SplitHostPort(c.Address)
+		if err != nil {
+			continue
+		}
+		ports = append(ports, port)
+	}
+	return ports, cobra.ShellCompDirectiveNoFileComp
+}
+
+func addressCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	addresses := []string{}
+	if connectionVarSend.String() == "tcp" {
+		return addresses, cobra.ShellCompDirectiveNoFileComp
+	}
+	allConnections, err := getAllConnections(connectionVarSend.String())
+	if err != nil {
+		return addresses, cobra.ShellCompDirectiveNoFileComp
+	}
+	for _, c := range allConnections {
+		addresses = append(addresses, c.Address)
+	}
+	return addresses, cobra.ShellCompDirectiveNoFileComp
+}
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
