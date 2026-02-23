@@ -4,8 +4,8 @@ builds:
     binary: gorepl
     goos:
       - linux
-      # - windows
-      # - darwin
+      - windows
+      - darwin
     goarch:
       - amd64
       - arm64
