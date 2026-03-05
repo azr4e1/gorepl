@@ -86,7 +86,7 @@ func sendUDS(command *cobra.Command, args []string, addressVarSend string) error
 func sendSocket(command *cobra.Command, args []string, socketType internals.SocketType, address string) error {
 	conn, err := net.Dial(string(socketType), address)
 	if err != nil {
-		return fmt.Errorf("Couldn't connect to a %s socket. Are you sure your repl is running at this address?", socketType)
+		return fmt.Errorf("couldn't connect to a %s socket. Are you sure your repl is running at this address?", socketType)
 	}
 	defer conn.Close()
 
@@ -112,7 +112,7 @@ func sendNamedPipe(command *cobra.Command, args []string, addressVarSend string)
 		nPipe, err = internals.NewTempFifo()
 	}
 	if err != nil {
-		return errors.New("Couldn't connect to a named pipe. Are you sure your repl is running at this address?")
+		return errors.New("couldn't connect to a named pipe. Are you sure your repl is running at this address?")
 	}
 	defer nPipe.Close()
 

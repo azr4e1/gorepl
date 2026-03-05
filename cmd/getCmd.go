@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/azr4e1/gorepl/internals"
@@ -44,41 +45,47 @@ func Get(command *cobra.Command, args []string) {
 
 func getConnections() (string, error) {
 	connections := []Connection{}
+	var namedPipeConns []Connection
+	var tcpConns []Connection
+	var udsConns []Connection
+	var err error
 	if allConnections {
-		namedPipeConns, err := getAllConnections("namedpipe")
+		if runtime.GOOS != "windows" {
+			namedPipeConns, err = getAllConnections("namedpipe")
+			if err != nil {
+				return "", err
+			}
+		} else {
+			namedPipeConns = []Connection{}
+		}
+		tcpConns, err = getAllConnections("tcp")
 		if err != nil {
 			return "", err
 		}
-		tcpConns, err := getAllConnections("tcp")
+		udsConns, err = getAllConnections("uds")
 		if err != nil {
 			return "", err
 		}
-		udsConns, err := getAllConnections("uds")
-		if err != nil {
-			return "", err
-		}
-
-		connections = append(connections, namedPipeConns...)
-		connections = append(connections, tcpConns...)
-		connections = append(connections, udsConns...)
 	} else {
-		namedPipeConns, err := getCurConnections("namedpipe")
+		if runtime.GOOS != "windows" {
+			namedPipeConns, err = getCurConnections("namedpipe")
+			if err != nil {
+				return "", err
+			}
+		}
+		tcpConns, err = getCurConnections("tcp")
 		if err != nil {
 			return "", err
 		}
-		tcpConns, err := getCurConnections("tcp")
-		if err != nil {
-			return "", err
-		}
-		udsConns, err := getCurConnections("uds")
+		udsConns, err = getCurConnections("uds")
 		if err != nil {
 			return "", err
 		}
 
-		connections = append(connections, namedPipeConns...)
-		connections = append(connections, tcpConns...)
-		connections = append(connections, udsConns...)
 	}
+	connections = append(connections, namedPipeConns...)
+	connections = append(connections, tcpConns...)
+	connections = append(connections, udsConns...)
 
 	if jsonVar {
 		jsonFormat, err := marshallConnectionsJSON(connections)
