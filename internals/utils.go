@@ -9,7 +9,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 	"sync"
 )
 
@@ -103,6 +103,6 @@ func GetPathCurDir() (string, error) {
 	hexString := hex.EncodeToString(res)
 	tempDir := os.TempDir()
 
-	tempPath := path.Join(tempDir, "gorepl_"+hexString)
+	tempPath := filepath.Join(tempDir, "gorepl_"+hexString)
 	return tempPath, nil
 }

@@ -7,7 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"os/signal"
-	"path"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -151,14 +151,18 @@ func createLogFile(logPath string) (*os.File, error) {
 	}
 
 	logTime := time.Now().Format("2006-01-02T15:04:05")
-	logDir := os.ExpandEnv("$HOME/.cache/gorepl")
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return nil, err
+	}
+	logDir := filepath.Join(cacheDir, "gorepl")
 	if ok, _ := internals.Exists(logDir); !ok {
 		err := os.MkdirAll(logDir, 0777)
 		if err != nil {
 			return nil, err
 		}
 	}
-	logPath = fmt.Sprintf(path.Join(logDir, "%s-logs"), logTime)
+	logPath = fmt.Sprintf(filepath.Join(logDir, "%s-logs"), logTime)
 	return os.Create(logPath)
 }
 

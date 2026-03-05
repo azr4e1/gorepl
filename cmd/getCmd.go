@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -132,7 +132,7 @@ func getAllConnections(connType string) ([]Connection, error) {
 		if pattern.Match([]byte(name)) {
 			var Address string
 			if Type == TCPType {
-				fd, err := os.Open(path.Join(tempPath, name))
+				fd, err := os.Open(filepath.Join(tempPath, name))
 				if err != nil {
 					continue
 				}
@@ -142,7 +142,7 @@ func getAllConnections(connType string) ([]Connection, error) {
 				}
 				Address = string(addressVal)
 			} else {
-				Address = path.Join(tempPath, name)
+				Address = filepath.Join(tempPath, name)
 			}
 			connection := Connection{Type: Type, Address: Address}
 			connections = append(connections, connection)
