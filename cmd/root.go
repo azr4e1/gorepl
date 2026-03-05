@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const Version = "v0.3.2"
+const Version = "v0.4.0"
 
 type connectionFlag string
 
