@@ -150,7 +150,7 @@ func createLogFile(logPath string) (*os.File, error) {
 		return os.Create(logPath)
 	}
 
-	logTime := time.Now().Format("2006-01-02T15:04:05")
+	logTime := time.Now().Format("2006-01-02T15-04-05")
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return nil, err
